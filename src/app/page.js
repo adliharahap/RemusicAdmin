@@ -1,93 +1,103 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import { 
+  Music, 
+  Film, 
+  LogOut, 
+  ArrowRight, 
+  LayoutGrid, 
+  Lock, 
+  Sparkles,
+  Command,
+  Loader2
+} from "lucide-react";
 import { useSelector } from "react-redux";
-import { logout } from "../../utils/handleLogout";
-import LoadingScreen from "./LoadingPage";
+import Link from "next/link";
 
-// --- SVG Icon Components (tidak ada perubahan) ---
-const FilmIcon = ({ className }) => (
-  <svg
-    xmlns="http://www.w3.org/2000/svg"
-    width="24"
-    height="24"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-    className={className}
-  >
-    <rect x="2" y="2" width="20" height="20" rx="2.18" ry="2.18"></rect>
-    <line x1="7" y1="2" x2="7" y2="22"></line>
-    <line x1="17" y1="2" x2="17" y2="22"></line>
-    <line x1="2" y1="12" x2="22" y2="12"></line>
-    <line x1="2" y1="7" x2="7" y2="7"></line>
-    <line x1="2" y1="17" x2="7" y2="17"></line>
-    <line x1="17" y1="17" x2="22" y2="17"></line>
-    <line x1="17" y1="7" x2="22" y2="7"></line>
-  </svg>
+// --- Mock Loading Component ---
+const LoadingScreen = () => (
+  <div className="flex items-center justify-center min-h-screen bg-[#0B0C15] text-indigo-500">
+    <Loader2 className="w-10 h-10 animate-spin" />
+  </div>
 );
 
-const MusicIcon = ({ className }) => (
-  <svg
-    xmlns="http://www.w3.org/2000/svg"
-    width="24"
-    height="24"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-    className={className}
-  >
-    <path d="M9 18V5l12-2v13"></path>
-    <circle cx="6" cy="18" r="3"></circle>
-    <circle cx="18" cy="16" r="3"></circle>
-  </svg>
-);
+// --- Sub-Component: Dashboard Card ---
+const DashboardCard = ({ 
+  title, 
+  description, 
+  icon: Icon, 
+  href, 
+  status = "active", 
+  accentColor 
+}) => {
+  const isLocked = status === "coming-soon";
+  
+  // Base classes
+  const containerClasses = `
+    relative overflow-hidden group p-1 rounded-3xl transition-all duration-500
+    ${isLocked ? 'cursor-not-allowed opacity-80' : 'hover:-translate-y-2 hover:shadow-2xl hover:shadow-indigo-500/20'}
+  `;
 
-const ArrowRightIcon = ({ className }) => (
-    <svg
-        xmlns="http://www.w3.org/2000/svg"
-        width="24"
-        height="24"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        className={className}
-    >
-        <line x1="5" y1="12" x2="19" y2="12"></line>
-        <polyline points="12 5 19 12 12 19"></polyline>
-    </svg>
-);
+  // Gradient Border Effect
+  const gradientClasses = `
+    absolute inset-0 bg-gradient-to-br opacity-20 transition-opacity duration-500 group-hover:opacity-100
+    ${accentColor === 'purple' ? 'from-purple-600 via-fuchsia-500 to-indigo-500' : 'from-indigo-500 via-blue-500 to-cyan-500'}
+  `;
 
-const LogoutIcon = ({ className }) => (
-    <svg 
-        xmlns="http://www.w3.org/2000/svg" 
-        width="24" 
-        height="24" 
-        viewBox="0 0 24 24" 
-        fill="none" 
-        stroke="currentColor" 
-        strokeWidth="2" 
-        strokeLinecap="round" 
-        strokeLinejoin="round" 
-        className={className}
-    >
-        <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
-        <polyline points="16 17 21 12 16 7"></polyline>
-        <line x1="21" y1="12" x2="9" y2="12"></line>
-    </svg>
-);
+  return (
+    <div className={containerClasses}>
+      {/* Background Gradient Border */}
+      <div className={gradientClasses} />
+      
+      {/* Card Content */}
+      <Link 
+        href={isLocked ? '#' : href}
+        onClick={(e) => isLocked && e.preventDefault()}
+        className="relative block h-full bg-slate-900/90 backdrop-blur-xl rounded-[22px] p-8 border border-white/5 overflow-hidden"
+      >
+        {/* Decorative Background Blob */}
+        <div className={`absolute top-0 right-0 -mr-16 -mt-16 w-64 h-64 rounded-full blur-3xl opacity-10 group-hover:opacity-20 transition-opacity duration-500 bg-${accentColor}-500`} />
 
+        <div className="relative z-10 flex flex-col h-full justify-between">
+          <div>
+            <div className="flex justify-between items-start mb-6">
+              <div className={`p-3.5 rounded-2xl bg-white/5 border border-white/10 text-${accentColor}-400 group-hover:text-white group-hover:bg-${accentColor}-500 transition-all duration-300`}>
+                <Icon size={32} strokeWidth={1.5} />
+              </div>
+              {isLocked ? (
+                <span className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-yellow-500/10 border border-yellow-500/20 text-yellow-500 text-xs font-medium uppercase tracking-wider">
+                  <Lock size={12} /> Coming Soon
+                </span>
+              ) : (
+                <span className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-medium uppercase tracking-wider">
+                  <span className="relative flex h-2 w-2">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                  </span>
+                  Active
+                </span>
+              )}
+            </div>
 
+            <h3 className="text-2xl font-bold text-white mb-2 group-hover:text-transparent group-hover:bg-clip-text group-hover:bg-gradient-to-r group-hover:from-white group-hover:to-gray-400 transition-all">
+              {title}
+            </h3>
+            <p className="text-slate-400 text-sm leading-relaxed">
+              {description}
+            </p>
+          </div>
 
+          {!isLocked && (
+            <div className="mt-8 flex items-center gap-2 text-sm font-semibold text-white/50 group-hover:text-white transition-colors">
+              Launch Dashboard <ArrowRight size={16} className="group-hover:translate-x-1 transition-transform" />
+            </div>
+          )}
+        </div>
+      </Link>
+    </div>
+  );
+};
 
 export default function Home() {
   const { user, loading } = useSelector((state) => state.auth);
@@ -100,88 +110,121 @@ export default function Home() {
     return null; // Tampilan kosong selagi proses redirect
   }
   
+
+  if (loading) {
+    return <LoadingScreen />;
+  }
+
+  // If logged out (null user), show a simple re-login button for demo purposes
+  if (!user) {
+    return (
+        <div className="min-h-screen w-full bg-[#0B0C15] flex flex-col items-center justify-center text-slate-200">
+            <h2 className="text-2xl font-bold mb-4">Logged Out</h2>
+            <button 
+                onClick={() => window.location.reload()}
+                className="px-6 py-2 bg-indigo-600 rounded-full hover:bg-indigo-500 transition-colors"
+            >
+                Login Again
+            </button>
+        </div>
+    ); 
+  }  
+
   return (
-    <main className="min-h-screen w-full bg-gray-900 text-gray-200 font-sans relative">
-      {/* Background Gradient Shapes */}
-      <div className="absolute top-0 left-0 w-full h-full overflow-hidden z-0">
-        <div className="absolute top-[-20%] left-[-10%] w-[500px] h-[500px] bg-purple-600/20 rounded-full filter blur-3xl animate-blob"></div>
-        <div className="absolute bottom-[-20%] right-[-10%] w-[500px] h-[500px] bg-indigo-600/20 rounded-full filter blur-3xl animate-blob animation-delay-4000"></div>
-      </div>
+    <main className="min-h-screen w-full bg-[#0B0C15] text-slate-200 font-sans selection:bg-indigo-500/30 relative overflow-hidden">
       
-      <div className="relative z-10 flex flex-col min-h-screen p-4 sm:p-8 max-w-5xl mx-auto">
+      {/* --- Background Grid Pattern --- */}
+      <div className="absolute inset-0 z-0 opacity-20" 
+        style={{
+          backgroundImage: `linear-gradient(#2d2d3a 1px, transparent 1px), linear-gradient(to right, #2d2d3a 1px, transparent 1px)`,
+          backgroundSize: '40px 40px'
+        }}
+      />
+      <div className="absolute inset-0 z-0 bg-gradient-to-t from-[#0B0C15] via-transparent to-transparent h-full w-full pointer-events-none" />
+
+      <div className="relative z-10 max-w-7xl mx-auto px-6 py-8 flex flex-col min-h-screen">
         
-        {/* Header Section with User Info */}
-        <header className="flex flex-col sm:flex-row justify-between items-center w-full mb-10 sm:mb-16 gap-4">
-            <div className="flex items-center gap-4">
-                <img 
-                    src={user?.photoURL || "https://i.pinimg.com/736x/f7/5c/b4/f75cb4ad9e644fa76c199b94c7c5877e.jpg"} 
-                    alt="Foto profil pengguna" 
-                    className="w-14 h-14 rounded-full border-2 border-slate-600 object-cover" 
-                />
-                <div>
-                    <h2 className="text-xl font-bold text-white">Hello, {user?.displayName || 'Pengguna'}!</h2>
-                    <h2 className="text-xs font-medium text-white opacity-80">{user?.email || 'email'}</h2>
-                    {/* TODO: Ambil data role dari Firestore/Database karena tidak tersedia di object auth standar */}
-                    <span className="text-sm font-medium bg-indigo-500/20 text-indigo-300 px-3 py-1 rounded-full inline-block mt-1">
-                        Administrator
-                    </span>
-                </div>
+        {/* --- Header / Navbar --- */}
+        <header className="flex flex-col md:flex-row justify-between items-center gap-6 mb-20">
+          <div className="flex items-center gap-3">
+            <div className="bg-indigo-600 p-2.5 rounded-xl shadow-lg shadow-indigo-500/20">
+              <Command className="text-white w-6 h-6" />
+            </div>
+            <div>
+              <h1 className="text-xl font-bold text-white tracking-tight">ReMusic<span className="text-slate-500">Panel</span></h1>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-4 bg-slate-900/50 backdrop-blur-md p-1.5 pr-2 rounded-full border border-white/10">
+            <div className="flex items-center gap-3 pl-2">
+               <img 
+                  src={user?.photo_url || user?.user_metadata?.avatar_url || user?.user_metadata?.picture || "https://cdn-icons-png.flaticon.com/512/149/149071.png"} 
+                  alt="Profile" 
+                  className="w-8 h-8 rounded-full ring-2 ring-indigo-500/30 object-cover" 
+              />
+              <div className="hidden sm:block text-left mr-2">
+                <p className="text-xs font-semibold text-white">{user?.displayName}</p>
+                <p className="text-[10px] text-slate-400 font-mono truncate max-w-[150px]">{user?.email}</p>
+              </div>
             </div>
             <button 
-              onClick={logout}
-              className="flex items-center gap-2 text-slate-400 hover:text-white transition-colors duration-300 bg-slate-800/50 border border-slate-700 px-4 py-2 rounded-lg"
+              className="p-2 rounded-full bg-slate-800 hover:bg-red-500/20 hover:text-red-400 text-slate-400 transition-all duration-200 group"
+              title="Logout"
             >
-                <LogoutIcon className="w-5 h-5" />
-                <span>Logout</span>
+              <LogOut size={16} />
             </button>
+          </div>
         </header>
 
-        {/* Main Content Area */}
-        <div className="flex-grow text-center">
-             <h1 className="font-poppins text-5xl md:text-6xl font-bold bg-clip-text text-transparent bg-gradient-to-b from-white to-gray-400 mb-4">
-              Selamat Datang di Admin Panel
-            </h1>
-            <p className="text-lg md:text-xl text-gray-400 mb-12">
-              Pilih aplikasi yang ingin Anda kelola dari dasbor.
-            </p>
-
-            {/* Card Container */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-              
-              {/* HiyoriNime Card (Disabled) */}
-              <div 
-                className="relative bg-slate-900/70 backdrop-blur-xl border border-slate-700 p-8 rounded-2xl shadow-lg flex flex-col items-center transition-all duration-300 cursor-not-allowed group"
-              >
-                 <span className="absolute top-4 right-4 bg-yellow-400/80 text-gray-900 text-xs font-bold px-3 py-1 rounded-full">
-                  Coming Soon
-                </span>
-                <div className="bg-slate-800 p-4 rounded-full mb-6 border border-slate-700">
-                    <FilmIcon className="w-10 h-10 text-purple-400" />
-                </div>
-                <h2 className="text-2xl font-semibold text-white">HiyoriNime</h2>
-                <p className="text-slate-400 mt-2">Kelola konten anime</p>
-              </div>
-
-              {/* ReMusic Card (Active) */}
-              <a
-                href="/remusic"
-                className="relative bg-slate-900/70 backdrop-blur-xl border border-slate-700 p-8 rounded-2xl shadow-lg flex flex-col items-center transition-all duration-300 group hover:border-indigo-500 hover:shadow-indigo-500/20 hover:-translate-y-2"
-              >
-                <div className="bg-slate-800 p-4 rounded-full mb-6 border border-slate-700 transition-all duration-300 group-hover:bg-indigo-500/20 group-hover:border-indigo-500">
-                    <MusicIcon className="w-10 h-10 text-indigo-400 transition-colors duration-300 group-hover:text-indigo-300" />
-                </div>
-                <h2 className="text-2xl font-semibold text-white">ReMusic</h2>
-                <p className="text-slate-400 mt-2">Kelola koleksi musik</p>
-                 <ArrowRightIcon className="absolute bottom-8 right-8 w-6 h-6 text-slate-500 opacity-0 transform -translate-x-4 transition-all duration-300 group-hover:opacity-100 group-hover:translate-x-0" />
-              </a>
-            </div>
+        {/* --- Hero Section --- */}
+        <div className="flex flex-col items-center justify-center text-center mb-16 space-y-4">
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 text-xs font-medium mb-2 animate-fade-in-up">
+            <Sparkles size={12} />
+            <span>Welcome back, {user?.displayName}</span>
+          </div>
+          
+          <h1 className="text-4xl md:text-6xl font-bold text-white tracking-tight max-w-4xl mx-auto">
+            Manage your <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 to-purple-400">Digital Empire</span>
+          </h1>
+          
+          <p className="text-lg text-slate-400 max-w-2xl mx-auto leading-relaxed">
+            Select an application below to access its control panel. Monitor metrics, manage content, and configure settings.
+          </p>
         </div>
-        
-        <footer className="text-center mt-16 text-gray-500 text-sm">
-            <p>&copy; {new Date().getFullYear()} ReMusic. All Rights Reserved.</p>
+
+        {/* --- Cards Grid --- */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-4xl mx-auto w-full mb-auto">
+          
+          {/* ReMusic Card */}
+          <DashboardCard 
+            title="ReMusic Manager"
+            description="Manage songs, albums, artists, and curate playlists for the music platform."
+            icon={Music}
+            href="/remusic"
+            status="active"
+            accentColor="indigo"
+          />
+
+          {/* HiyoriNime Card */}
+          <DashboardCard 
+            title="HiyoriNime"
+            description="Anime content database. Upload episodes, manage series metadata, and servers."
+            icon={Film}
+            href="#"
+            status="coming-soon"
+            accentColor="purple"
+          />
+        </div>
+
+        {/* --- Footer --- */}
+        <footer className="mt-16 py-6 border-t border-white/5 text-center">
+            <p className="text-slate-500 text-sm flex items-center justify-center gap-2">
+              <LayoutGrid size={14} />
+              &copy; {new Date().getFullYear()} ReMusic Ecosystem. Designed for efficiency.
+            </p>
         </footer>
+
       </div>
     </main>
   );
 }
-

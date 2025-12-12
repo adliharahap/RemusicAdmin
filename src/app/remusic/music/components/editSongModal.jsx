@@ -1,341 +1,371 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { doc, updateDoc } from 'firebase/firestore';
-import { db } from '../../../../../utils/firebase';
+"use client";
 
-// --- Data Pilihan Mood ---
-const moodsWithDescription = {
-    "Happy": "Lagu ceria, lirik positif, beat upbeat.",
-    "Sad": "Lagu mellow, lirik tentang kehilangan atau patah hati.",
-    "Chill": "Lagu santai, relaxing, cocok untuk suasana tenang.",
-    "Energetic": "Lagu cepat, penuh semangat, beat kencang.",
-    "Romantic": "Lagu tentang cinta, penuh perasaan, bikin baper.",
-    "Angry": "Lagu keras, penuh emosi, lirik marah atau beat intens.",
-    "Melancholic": "Lagu sendu, bernuansa nostalgia, bikin teringat masa lalu.",
-    "Confident": "Lagu swag, penuh percaya diri, vibe keren.",
-    "Party": "Lagu upbeat, dance, EDM, untuk kumpul rame-rame.",
-    "Epic": "Lagu megah, cinematic, seperti soundtrack film/game.",
-    "Focus": "Lagu instrumental, lo-fi, atau classical untuk belajar/kerja.",
-    "Hopeful": "Lagu optimis, lirik positif, vibe uplifting.",
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { X, Save, Play, Pause, RefreshCw, User, Music, Clock } from 'lucide-react'; // Gunakan Lucide icons agar konsisten
+import { supabase } from '../../../../../lib/supabaseClient';
+
+// --- HELPER: Parse Lirik LRC ---
+const parseLrc = (lrcString) => {
+    if (!lrcString) return [];
+    const lines = lrcString.split('\n');
+    const regex = /^\[(\d{2}):(\d{2})\.(\d{2,3})\](.*)/;
+    
+    return lines.map((line, index) => {
+        const match = line.match(regex);
+        if (match) {
+            const minutes = parseInt(match[1]);
+            const seconds = parseInt(match[2]);
+            const milliseconds = parseInt(match[3]);
+            // Konversi ke detik float
+            const time = minutes * 60 + seconds + milliseconds / 1000;
+            return { time, text: match[4].trim(), original: line, index };
+        }
+        return { time: -1, text: line, original: line, index }; // Baris tanpa timestamp
+    }).filter(l => l.time !== -1); // Filter baris kosong/invalid
+};
+
+// --- HELPER: Format Waktu (Detik -> [MM:SS.ms]) ---
+const formatTimestamp = (currentTime) => {
+    const minutes = Math.floor(currentTime / 60);
+    const seconds = Math.floor(currentTime % 60);
+    const ms = Math.floor((currentTime % 1) * 100);
+    return `[${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}.${String(ms).padStart(2, '0')}]`;
 };
 
 
-// --- Komponen Ikon ---
-const CloseIcon = () => (
-    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-    </svg>
-);
-
-const SaveIcon = () => (
-    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
-        <path d="M7.707 10.293a1 1 0 10-1.414 1.414l3 3a1 1 0 001.414 0l3-3a1 1 0 00-1.414-1.414L11 11.586V6a1 1 0 10-2 0v5.586L7.707 10.293zM5 3a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2V5a2 2 0 00-2-2H5z" />
-    </svg>
-);
-
-const PlayIcon = () => (
-    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-400" viewBox="0 0 20 20" fill="currentColor">
-        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clipRule="evenodd" />
-    </svg>
-);
-
-const UserIcon = () => (
-    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-400" viewBox="0 0 20 20" fill="currentColor">
-        <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
-    </svg>
-);
-
-
-// --- Komponen Textarea Lirik Otomatis ---
-function LyricsTextarea({ formData, handleInputChange }) {
-    const textareaRef = useRef(null);
-
-    useEffect(() => {
-        if (textareaRef.current) {
-            textareaRef.current.style.height = "auto";
-            textareaRef.current.style.height = textareaRef.current.scrollHeight + "px";
-        }
-    }, [formData?.lyrics]);
-
-    return (
-        <textarea
-            ref={textareaRef}
-            id="lyrics"
-            name="lyrics"
-            rows="1"
-            className="w-full bg-gray-700 border-gray-600 text-gray-200 rounded-md px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition resize-none overflow-hidden"
-            value={formData?.lyrics || ""}
-            onChange={handleInputChange}
-            placeholder="Masukkan lirik di sini..."
-            onInput={(e) => {
-                e.target.style.height = "auto";
-                e.target.style.height = e.target.scrollHeight + "px";
-            }}
-        ></textarea>
-    );
-}
-
-
-// --- Komponen Modal Utama ---
-function EditSongModal({ isOpen, onClose, song, fetched }) {
-    const [formData, setFormData] = useState(song || {});
-    const [selectedMoods, setSelectedMoods] = useState(song?.moods || []);
-    const [coverPreview, setCoverPreview] = useState(song?.coverUrl || null);
+export default function EditSongModal({ isOpen, onClose, song, onSuccess }) {
+    console.log(song);
+    
+    
+    // State Form
+    const [formData, setFormData] = useState({});
+    
+    // State Audio & Lyrics
+    const audioRef = useRef(null);
+    const [isPlaying, setIsPlaying] = useState(false);
+    const [currentTime, setCurrentTime] = useState(0);
+    const [parsedLyrics, setParsedLyrics] = useState([]);
+    const [activeLyricIndex, setActiveLyricIndex] = useState(-1);
+    
     const [isSaving, setIsSaving] = useState(false);
 
+    // --- 1. INIT DATA ---
     useEffect(() => {
         if (song) {
-            setFormData(song);
-            setSelectedMoods(song.moods || []);
-            setCoverPreview(song.coverUrl || null);
-        } else {
-            setFormData({});
-            setSelectedMoods([]);
-            setCoverPreview(null);
+            // Gunakan originalData (snake_case) jika ada, atau mapping manual
+            const dataToUse = song.originalData || {
+                id: song.id,
+                title: song.title,
+                artist_id: song.artistId,
+                artist_name: song.artistName, // Pastikan dikirim dari parent
+                cover_url: song.coverUrl,
+                audio_url: song.audioUrl,
+                play_count: song.playCount,
+                lyrics: song.lyrics,
+                moods: song.moods
+            };
+            setFormData(dataToUse);
+            setParsedLyrics(parseLrc(dataToUse.lyrics || ""));
         }
-    }, [song]);
-    
-    const handleEsc = useCallback((event) => {
-        if (event.key === 'Escape') {
-            onClose();
-        }
-    }, [onClose]);
+    }, [song, isOpen]);
 
+    // --- 2. AUDIO & LYRIC SYNC LOGIC ---
     useEffect(() => {
-        if (isOpen) {
-            document.addEventListener('keydown', handleEsc);
-        }
-        return () => {
-            document.removeEventListener('keydown', handleEsc);
-        };
-    }, [isOpen, handleEsc]);
+        if (!audioRef.current) return;
 
-    if (!isOpen) return null;
+        const updateTime = () => {
+            const time = audioRef.current.currentTime;
+            setCurrentTime(time);
+
+            // Cari index lirik yang aktif
+            const index = parsedLyrics.findIndex((line, i) => {
+                const nextLine = parsedLyrics[i + 1];
+                return time >= line.time && (!nextLine || time < nextLine.time);
+            });
+            setActiveLyricIndex(index);
+        };
+
+        const audio = audioRef.current;
+        audio.addEventListener('timeupdate', updateTime);
+        return () => audio.removeEventListener('timeupdate', updateTime);
+    }, [parsedLyrics]);
+
+    // Scroll lirik aktif ke tengah
+    const activeLyricRef = useRef(null);
+    useEffect(() => {
+        if (activeLyricRef.current) {
+            activeLyricRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+    }, [activeLyricIndex]);
+
+
+    // --- HANDLERS ---
     
     const handleInputChange = (e) => {
         const { name, value } = e.target;
         setFormData(prev => ({ ...prev, [name]: value }));
-        if (name === 'coverUrl') {
-            setCoverPreview(value || null);
+        
+        // Jika lirik diubah manual di textarea, parse ulang
+        if (name === 'lyrics') {
+            setParsedLyrics(parseLrc(value));
         }
     };
 
-    const handleMoodToggle = (mood) => {
-        setSelectedMoods(prev =>
-            prev.includes(mood)
-                ? prev.filter(m => m !== mood)
-                : [...prev, mood]
-        );
+    // Fitur "Paskan Timestamp"
+    const syncTimestamp = (index) => {
+        if (!audioRef.current) return;
+        
+        const newTime = audioRef.current.currentTime;
+        const newTimestampString = formatTimestamp(newTime);
+        
+        // Update di state parsedLyrics (untuk UI)
+        const updatedParsedLyrics = [...parsedLyrics];
+        updatedParsedLyrics[index].time = newTime;
+        updatedParsedLyrics[index].original = `${newTimestampString} ${updatedParsedLyrics[index].text}`;
+        setParsedLyrics(updatedParsedLyrics);
+
+        // Update di textarea (Raw String) -> Ini yang akan disimpan ke DB
+        const newRawLyrics = updatedParsedLyrics.map(l => l.original).join('\n');
+        setFormData(prev => ({ ...prev, lyrics: newRawLyrics }));
+    };
+
+    const togglePlay = () => {
+        if (audioRef.current.paused) {
+            audioRef.current.play();
+            setIsPlaying(true);
+        } else {
+            audioRef.current.pause();
+            setIsPlaying(false);
+        }
     };
 
     const handleSubmit = async (e) => {
         e.preventDefault();
-        if (!db) {
-            console.error("Error: Firebase db instance is not provided to the modal.");
-            return;
-        }
-        if (!song?.id) {
-            console.error("Error: Song ID is missing, cannot update.");
-            return;
-        }
-
         setIsSaving(true);
         try {
-            const songDocRef = doc(db, 'songs', song.id);
-            const finalData = { ...formData, moods: selectedMoods };
-            
-            delete finalData.id; 
+            const { error } = await supabase
+                .from('songs')
+                .update({
+                    title: formData.title,
+                    play_count: formData.play_count,
+                    cover_url: formData.cover_url,
+                    audio_url: formData.audio_url,
+                    lyrics: formData.lyrics,
+                    // Artist ID & Name tidak diupdate (readonly)
+                })
+                .eq('id', song.id);
 
-            await updateDoc(songDocRef, finalData);
-            console.log("Data berhasil diperbarui untuk lagu:", song.id);
-            fetched();
+            if (error) throw error;
+            
+            if (onSuccess) onSuccess();
             onClose();
         } catch (error) {
-            console.error("Gagal menyimpan data:", error);
+            console.error("Gagal update:", error);
+            alert("Gagal update lagu.");
         } finally {
             setIsSaving(false);
         }
     };
 
+    if (!isOpen) return null;
+
     return (
-        <div 
-            className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-70 transition-opacity duration-300"
-            onClick={onClose}
-        >
-            <div
-                className="bg-gray-800 text-gray-200 rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col m-4 transform transition-all duration-300 scale-95 animate-fade-in"
-                onClick={(e) => e.stopPropagation()}
-            >
-                <header className="flex justify-between items-center p-5 border-b border-gray-700">
-                    <h2 className="text-xl font-bold text-white">Edit Detail Lagu</h2>
-                    <button onClick={onClose} className="p-1 rounded-full text-gray-400 hover:bg-gray-700 hover:text-white transition-colors">
-                        <CloseIcon />
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+            <div className="bg-gray-900 w-full max-w-6xl h-[90vh] rounded-2xl shadow-2xl overflow-hidden flex flex-col border border-gray-800">
+                
+                {/* Header */}
+                <div className="flex justify-between items-center p-6 border-b border-gray-800 bg-gray-900/50">
+                    <div>
+                        <h2 className="text-xl font-bold text-white flex items-center gap-2">
+                            <Music className="text-indigo-500" /> Edit Lagu
+                        </h2>
+                        <p className="text-sm text-gray-500">ID: {song?.id}</p>
+                    </div>
+                    <button onClick={onClose} className="p-2 hover:bg-gray-800 rounded-full text-gray-400 hover:text-white transition">
+                        <X size={24} />
                     </button>
-                </header>
-
-                <div className="flex-grow p-6 overflow-y-auto">
-                    <form id="edit-song-form" onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-3 gap-8">
-                        {/* Kolom Kiri: Media */}
-                        <div className="space-y-6">
-                            <div>
-                                <label htmlFor="coverUrl" className="block text-sm font-medium text-gray-400 mb-2">URL Sampul</label>
-                                <img 
-                                    src={coverPreview || 'https://placehold.co/600x600/1F2937/FFFFFF?text=No+Image'} 
-                                    alt="Pratinjau Sampul" 
-                                    className="w-full h-auto object-cover rounded-lg shadow-lg mb-3 aspect-square bg-gray-700"
-                                    onError={(e) => { e.target.onerror = null; e.target.src='https://placehold.co/600x600/1F2937/FFFFFF?text=Invalid+Image' }}
-                                />
-                                <input 
-                                    type="url" 
-                                    id="coverUrl" 
-                                    name="coverUrl" 
-                                    className="w-full bg-gray-700 border-gray-600 text-gray-200 rounded-md px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition" 
-                                    value={formData?.coverUrl || ''}
-                                    onChange={handleInputChange}
-                                />
-                            </div>
-                            <div>
-                                <label htmlFor="audioUrl" className="block text-sm font-medium text-gray-400 mb-2">Pemutar Audio</label>
-                                <audio controls className="w-full" src={formData?.audioUrl || ''}>
-                                    Your browser does not support the audio element.
-                                </audio>
-                                <input 
-                                    type="url" 
-                                    id="audioUrl" 
-                                    name="audioUrl" 
-                                    className="w-full bg-gray-700 border-gray-600 text-gray-200 rounded-md px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition mt-3" 
-                                    value={formData?.audioUrl || ''}
-                                    onChange={handleInputChange}
-                                    placeholder="URL Audio"
-                                />
-                            </div>
-                        </div>
-
-                        {/* Kolom Kanan: Metadata */}
-                        <div className="md:col-span-2 space-y-6">
-                            <div>
-                                <label htmlFor="title" className="block text-sm font-medium text-gray-400 mb-2">Judul</label>
-                                <input 
-                                    type="text" 
-                                    id="title" 
-                                    name="title" 
-                                    className="w-full bg-gray-700 border-gray-600 text-gray-200 rounded-md px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition" 
-                                    value={formData?.title || ''}
-                                    onChange={handleInputChange}
-                                />
-                            </div>
-                            <div>
-                                <label htmlFor="artistId" className="block text-sm font-medium text-gray-400 mb-2">Artis ID</label>
-                                <div className="relative">
-                                    <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
-                                        <UserIcon />
-                                    </div>
-                                    <input
-                                        type="text"
-                                        id="artistId"
-                                        name="artistId"
-                                        className="w-full bg-gray-700 border-gray-600 text-gray-200 rounded-md pl-10 pr-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition"
-                                        value={formData?.artistId || ''}
-                                        onChange={handleInputChange}
-                                    />
-                                </div>
-                            </div>
-                            <div>
-                                <label htmlFor="playCount" className="block text-sm font-medium text-gray-400 mb-2">Jumlah Diputar</label>
-                                <div className="relative">
-                                     <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
-                                        <PlayIcon />
-                                    </div>
-                                    <input 
-                                        type="number" 
-                                        id="playCount" 
-                                        name="playCount" 
-                                        className="w-full bg-gray-700 border-gray-600 text-gray-200 rounded-md pl-10 pr-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition" 
-                                        value={formData?.playCount || 0}
-                                        onChange={handleInputChange}
-                                    />
-                                </div>
-                            </div>
-                             <div>
-                                <label htmlFor="lyrics" className="block text-sm font-medium text-gray-400 mb-2">Lirik</label>
-                                <LyricsTextarea formData={formData} handleInputChange={handleInputChange} />
-                            </div>
-                            <div>
-                                <label className="block text-sm font-medium text-gray-400 mb-3">Moods</label>
-                                <div className="flex flex-wrap gap-2">
-                                    {Object.keys(moodsWithDescription).map(mood => (
-                                        <button
-                                            key={mood}
-                                            type="button"
-                                            onClick={() => handleMoodToggle(mood)}
-                                            title={moodsWithDescription[mood]}
-                                            className={`px-3 py-1.5 text-sm font-medium rounded-full transition-all duration-200 ${
-                                                selectedMoods.includes(mood)
-                                                    ? 'bg-indigo-600 text-white shadow-md ring-2 ring-indigo-400'
-                                                    : 'bg-gray-600 text-gray-200 hover:bg-gray-500'
-                                            }`}
-                                        >
-                                            {mood}
-                                        </button>
-                                    ))}
-                                </div>
-                            </div>
-                        </div>
-                    </form>
                 </div>
 
-                <footer className="flex justify-end items-center p-5 border-t border-gray-700 bg-gray-800 rounded-b-xl">
-                    <button type="button" onClick={onClose} className="bg-gray-600 text-gray-200 font-semibold py-2 px-5 rounded-lg mr-3 hover:bg-gray-500 transition-colors" disabled={isSaving}>
+                <div className="flex-1 overflow-hidden flex flex-col lg:flex-row">
+                    
+                    {/* KOLOM KIRI: FORM & MEDIA */}
+                    <div className="w-full lg:w-1/2 p-6 overflow-y-auto border-r border-gray-800 space-y-6">
+                        
+                        {/* Audio Player */}
+                        <div className="bg-gray-800 p-4 rounded-xl border border-gray-700">
+                            <div className="flex items-center gap-4 mb-4">
+                                <img 
+                                    src={formData.cover_url || "https://placehold.co/100?text=No+Cover"} 
+                                    className="w-16 h-16 rounded-lg object-cover bg-gray-900" 
+                                />
+                                <div>
+                                    <h3 className="font-bold text-white">{formData.title}</h3>
+                                    <p className="text-sm text-gray-400">{formData.artist_name || 'Unknown'}</p>
+                                </div>
+                            </div>
+                            <audio 
+                                ref={audioRef} 
+                                src={formData.audio_url} 
+                                className="w-full" 
+                                controls 
+                                onPlay={() => setIsPlaying(true)}
+                                onPause={() => setIsPlaying(false)}
+                            />
+                        </div>
+
+                        {/* Metadata Form */}
+                        <form id="song-form" onSubmit={handleSubmit} className="space-y-4">
+                            <div>
+                                <label className="text-xs font-bold text-gray-500 uppercase">Judul Lagu</label>
+                                <input 
+                                    type="text" 
+                                    name="title" 
+                                    className="w-full bg-gray-800 border border-gray-700 rounded-lg p-3 text-white focus:ring-2 focus:ring-indigo-500 outline-none mt-1"
+                                    value={formData.title || ''}
+                                    onChange={handleInputChange}
+                                />
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="text-xs font-bold text-gray-500 uppercase">Artis (Read-Only)</label>
+                                    <div className="relative mt-1">
+                                        <User className="absolute left-3 top-3 text-gray-500 w-4 h-4" />
+                                        <input 
+                                            type="text" 
+                                            className="w-full bg-gray-900/50 border border-gray-800 rounded-lg p-3 pl-10 text-gray-400 cursor-not-allowed"
+                                            value={formData.artist_name || ''}
+                                            readOnly
+                                            disabled
+                                        />
+                                    </div>
+                                </div>
+                                <div>
+                                    <label className="text-xs font-bold text-gray-500 uppercase">Artist ID</label>
+                                    <input 
+                                        type="text" 
+                                        className="w-full bg-gray-900/50 border border-gray-800 rounded-lg p-3 text-gray-400 cursor-not-allowed mt-1 font-mono text-xs"
+                                        value={formData.artist_id || ''}
+                                        readOnly
+                                        disabled
+                                    />
+                                </div>
+                            </div>
+
+                            <div>
+                                <label className="text-xs font-bold text-gray-500 uppercase">Play Count</label>
+                                <input 
+                                    type="number" 
+                                    name="play_count" 
+                                    className="w-full bg-gray-800 border border-gray-700 rounded-lg p-3 text-white focus:ring-2 focus:ring-indigo-500 outline-none mt-1"
+                                    value={formData.play_count || 0}
+                                    onChange={handleInputChange}
+                                />
+                            </div>
+
+                            {/* Raw Lyrics Editor (Hidden/Optional or Small) */}
+                            <div>
+                                <label className="text-xs font-bold text-gray-500 uppercase">Edit Lirik Manual (Raw)</label>
+                                <textarea 
+                                    name="lyrics"
+                                    className="w-full bg-gray-800 border border-gray-700 rounded-lg p-3 text-white font-mono text-xs focus:ring-2 focus:ring-indigo-500 outline-none mt-1 h-32"
+                                    value={formData.lyrics || ''}
+                                    onChange={handleInputChange}
+                                    placeholder="[00:00.00] Lirik..."
+                                />
+                            </div>
+                        </form>
+                    </div>
+
+                    {/* KOLOM KANAN: LYRICS SYNC EDITOR */}
+                    <div className="w-full lg:w-1/2 flex flex-col bg-gray-950">
+                        <div className="p-4 border-b border-gray-800 bg-gray-900 flex justify-between items-center">
+                            <h3 className="font-bold text-white flex items-center gap-2">
+                                <Clock size={18} className="text-green-500" /> Sync Editor
+                            </h3>
+                            <div className="text-xs text-gray-400 bg-gray-800 px-2 py-1 rounded">
+                                Waktu: {formatTimestamp(currentTime)}
+                            </div>
+                        </div>
+
+                        <div className="flex-1 overflow-y-auto p-6 space-y-2 relative">
+                            {parsedLyrics.length > 0 ? (
+                                parsedLyrics.map((line, idx) => {
+                                    const isActive = idx === activeLyricIndex;
+                                    return (
+                                        <div 
+                                            key={idx}
+                                            ref={isActive ? activeLyricRef : null}
+                                            className={`
+                                                flex items-center gap-4 p-3 rounded-lg transition-all duration-300
+                                                ${isActive ? 'bg-indigo-900/30 border border-indigo-500/50 scale-105' : 'hover:bg-gray-900 border border-transparent'}
+                                            `}
+                                        >
+                                            {/* Timestamp Button */}
+                                            <button 
+                                                type="button"
+                                                onClick={() => syncTimestamp(idx)}
+                                                className={`
+                                                    font-mono text-xs px-2 py-1 rounded cursor-pointer transition-colors whitespace-nowrap
+                                                    ${isActive ? 'bg-indigo-600 text-white' : 'bg-gray-800 text-gray-500 hover:text-white'}
+                                                `}
+                                                title="Klik untuk set timestamp ke waktu sekarang"
+                                            >
+                                                {formatTimestamp(line.time)}
+                                            </button>
+
+                                            {/* Lyric Text */}
+                                            <p className={`text-sm flex-1 ${isActive ? 'text-white font-bold' : 'text-gray-400'}`}>
+                                                {line.text}
+                                            </p>
+
+                                            {/* Sync Action Icon */}
+                                            <button 
+                                                onClick={() => syncTimestamp(idx)}
+                                                className="p-2 text-gray-600 hover:text-green-400 transition opacity-0 group-hover:opacity-100"
+                                                title="Sync Here"
+                                            >
+                                                <RefreshCw size={14} />
+                                            </button>
+                                        </div>
+                                    );
+                                })
+                            ) : (
+                                <div className="text-center text-gray-500 mt-20">
+                                    <p>Lirik belum tersedia atau format salah.</p>
+                                    <p className="text-xs mt-2">Format: [MM:SS.ms] Teks Lirik</p>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Floating Play Control for Syncing */}
+                        <div className="p-4 border-t border-gray-800 bg-gray-900 flex justify-center">
+                             <button 
+                                onClick={togglePlay}
+                                className="w-12 h-12 rounded-full bg-indigo-600 text-white flex items-center justify-center shadow-lg hover:bg-indigo-500 transition active:scale-95"
+                             >
+                                {isPlaying ? <Pause fill="currentColor" /> : <Play fill="currentColor" className="ml-1" />}
+                             </button>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Footer */}
+                <div className="p-4 border-t border-gray-800 bg-gray-900 flex justify-end gap-3">
+                    <button onClick={onClose} className="px-5 py-2.5 rounded-lg border border-gray-700 text-gray-300 hover:bg-gray-800 transition">
                         Batal
                     </button>
                     <button 
                         type="submit" 
-                        form="edit-song-form" 
-                        className="bg-indigo-600 text-white font-semibold py-2 px-5 rounded-lg hover:bg-indigo-700 transition-colors flex items-center justify-center disabled:bg-indigo-400 disabled:cursor-not-allowed"
+                        form="song-form" 
                         disabled={isSaving}
+                        className="px-6 py-2.5 rounded-lg bg-indigo-600 text-white font-bold hover:bg-indigo-500 transition flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                        {isSaving ? (
-                            <>
-                                <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                                </svg>
-                                Menyimpan...
-                            </>
-                        ) : (
-                            <>
-                                <SaveIcon />
-                                Simpan
-                            </>
-                        )}
+                        {isSaving ? 'Menyimpan...' : <><Save size={18} /> Simpan Perubahan</>}
                     </button>
-                </footer>
+                </div>
+
             </div>
-            <style jsx>{`
-                @keyframes fade-in {
-                    from { opacity: 0; transform: scale(0.95); }
-                    to { opacity: 1; transform: scale(1); }
-                }
-                .animate-fade-in {
-                    animation: fade-in 0.2s ease-out forwards;
-                }
-                /* Custom Scrollbar */
-                ::-webkit-scrollbar {
-                    width: 8px;
-                }
-                ::-webkit-scrollbar-track {
-                    background: #2d3748; /* gray-800 */
-                }
-                ::-webkit-scrollbar-thumb {
-                    background: #4a5568; /* gray-600 */
-                    border-radius: 10px;
-                }
-                ::-webkit-scrollbar-thumb:hover {
-                    background: #718096; /* gray-500 */
-                }
-            `}</style>
         </div>
     );
 }
-
-export default EditSongModal;
-

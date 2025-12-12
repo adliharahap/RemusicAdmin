@@ -1,9 +1,7 @@
+import { LogOutIcon, XIcon } from "lucide-react";
+import Link from "next/link";
 import { usePathname } from "next/navigation";
-
-// --- SVG Icon Components ---
-
-const LogoutIcon = ({ className }) => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>;
-const XIcon = ({ className }) => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>;
+import { logout } from "../../../utils/handleLogout";
 
 
 function classNames(...classes) {
@@ -28,11 +26,12 @@ export default function SidebarContent({navigation, user, onClose }) {
             </div>
             {/* Profile Section */}
             <div className="flex flex-col items-center gap-y-3 text-center">
-                <img className="h-24 w-24 rounded-full bg-gray-800 object-cover ring-2 ring-slate-700" src={user?.photoURL || "https://i.pinimg.com/736x/f7/5c/b4/f75cb4ad9e644fa76c199b94c7c5877e.jpg"} alt="User profile" />
+                <img className="h-24 w-24 rounded-full bg-gray-800 object-cover ring-2 ring-slate-700" 
+                src={user?.photo_url || user?.user_metadata?.avatar_url || user?.user_metadata?.picture || "https://i.pinimg.com/736x/f7/5c/b4/f75cb4ad9e644fa76c199b94c7c5877e.jpg"} alt="User profile" />
                 <div>
-                    <p className="font-semibold text-white">{user?.displayName || "Unknown user"}</p>
+                    <p className="font-semibold text-white">{user?.display_name || user?.user_metadata.full_name || "Unknown user"}</p>
                     <p className="text-sm text-gray-400">{user?.email ||  "unknown email"}</p>
-                    <p className="mt-2 text-xs font-medium bg-indigo-500/20 text-indigo-300 px-2 py-0.5 rounded-full inline-block">{user.role || "owner"}</p>
+                    <p className="mt-2 text-xs font-medium bg-indigo-500/20 text-indigo-300 px-2 py-0.5 rounded-full inline-block">{user.role || "Unknown role"}</p>
                 </div>
             </div>
             <nav className="flex flex-1 flex-col mt-4">
@@ -43,7 +42,7 @@ export default function SidebarContent({navigation, user, onClose }) {
                                 const isActive = pathname === item.href;
                                 return (
                                     <li key={item.name}>
-                                        <a
+                                        <Link
                                             href={item.href}
                                             className={classNames(
                                                 isActive
@@ -54,20 +53,20 @@ export default function SidebarContent({navigation, user, onClose }) {
                                         >
                                             <item.icon className="h-6 w-6 shrink-0" aria-hidden="true" />
                                             {item.name}
-                                        </a>
+                                        </Link>
                                     </li>
                                 );
                             })}
                         </ul>
                     </li>
                     <li className="mt-auto">
-                        <a
-                            href="#"
+                        <button
+                            onClick={logout}
                             className="group -mx-2 flex gap-x-3 rounded-md p-2 text-sm font-semibold leading-6 text-gray-400 hover:bg-slate-800 hover:text-white"
                         >
-                            <LogoutIcon className="h-6 w-6 shrink-0" aria-hidden="true" />
+                            <LogOutIcon className="h-6 w-6 shrink-0" aria-hidden="true" />
                             Logout
-                        </a>
+                        </button>
                     </li>
                 </ul>
             </nav>
