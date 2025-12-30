@@ -1,7 +1,7 @@
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import { NextResponse } from 'next/server'
-import { deleteFromGithub, uploadToGithub } from '../../../../lib/githubHelper'
+import { deleteFromGithub, uploadToGithub } from '../../../../../lib/githubHelper'
 
 async function createClient() {
   const cookieStore = await cookies()
