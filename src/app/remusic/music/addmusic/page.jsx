@@ -1,332 +1,487 @@
 "use client";
+import React, { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import { X, Save, Loader2, Sun, Moon, Upload } from 'lucide-react';
+import { supabase } from '../../../../../lib/supabaseClient';
+import { useTheme } from 'next-themes';
 
-import React, { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
-import { 
-  collection, 
-  addDoc, 
-  getDocs, 
-  serverTimestamp, 
-  doc, 
-  setDoc 
-} from "firebase/firestore";
-import { 
-  ref, 
-  uploadBytes, 
-  getDownloadURL 
-} from "firebase/storage";
-import { onAuthStateChanged } from "firebase/auth";
-import { auth, db, storage } from "../../../../../utils/firebase";
-// import { onAuthStateChanged } from "firebase/auth";
-// import { db, storage, auth } from "@/utils/firebase"; // Sesuaikan path import firebase config kamu
+// Import Komponen Modular
+import { uploadToGithub, parseLrc, getAudioDuration, formatTimestamp } from './_utils/uploadHelpers';
+import ArtistSelector from './_components/ArtistSelector';
+import FileUploadSection from './_components/FileUploadSection';
+import MetadataForm from './_components/MetadataForm';
+import VisualSyncEditor from './_components/VisualSyncEditor';
+import ImageCropperModal from './_components/ImageCropperModal';
+import MetadataLoadingModal from './_components/MetadataLoadingModal';
 
-// Helper untuk menghitung durasi audio di browser
-const getAudioDuration = (file) => {
-  return new Promise((resolve, reject) => {
-    const objectUrl = URL.createObjectURL(file);
-    const audio = new Audio(objectUrl);
-    
-    audio.onloadedmetadata = () => {
-      // Mengembalikan durasi dalam milidetik
-      resolve(Math.round(audio.duration * 1000));
-      URL.revokeObjectURL(objectUrl);
-    };
-    
-    audio.onerror = (e) => {
-      reject("Gagal memuat file audio untuk menghitung durasi.");
-    };
-  });
-};
+export default function UploadSongPage() {
+    const router = useRouter();
+    const { resolvedTheme } = useTheme();
+    const [mounted, setMounted] = useState(false);
 
-export default function UploadMusicPage() {
-  const router = useRouter();
-  
-  // --- State Management ---
-  const [user, setUser] = useState(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isUploading, setIsUploading] = useState(false);
-  const [uploadStep, setUploadStep] = useState("");
-  
-  // Form State
-  const [title, setTitle] = useState("");
-  const [lyrics, setLyrics] = useState("");
-  const [selectedArtistId, setSelectedArtistId] = useState("");
-  const [audioFile, setAudioFile] = useState(null);
-  const [coverFile, setCoverFile] = useState(null);
-  const [selectedMoods, setSelectedMoods] = useState([]);
-  
-  // Data Fetching State
-  const [artists, setArtists] = useState([]);
+    // Wait for mount to avoid hydration mismatch
+    useEffect(() => {
+        setMounted(true);
+    }, []);
 
-  // Pilihan Mood (Bisa disesuaikan atau fetch dari DB juga)
-  const availableMoods = ["Happy", "Sad", "Energetic", "Relaxing", "Focus", "Chill", "Party", "Romance"];
+    const isDarkMode = mounted ? resolvedTheme === 'dark' : true; // Default to dark if not mounted yet or prefer dark
 
-  // --- 1. Auth & Data Fetching ---
-  useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
-      if (!currentUser) {
-        router.push("/login"); // Redirect jika tidak login
-      } else {
-        setUser(currentUser);
+    const [isUploading, setIsUploading] = useState(false);
+    const [uploadStep, setUploadStep] = useState("");
+    const [isMetadataLoading, setIsMetadataLoading] = useState(false);
+
+    // --- FORM STATES ---
+    const [title, setTitle] = useState("");
+    const [language, setLanguage] = useState("id");
+    const [moods, setMoods] = useState([]);
+    const [lyricsRaw, setLyricsRaw] = useState("");
+    const [telegramFileId, setTelegramFileId] = useState("");
+    const [telegramDuration, setTelegramDuration] = useState(0);
+
+    // --- ARTIST STATES ---
+    const [artists, setArtists] = useState([]);
+    const [selectedArtist, setSelectedArtist] = useState(null);
+    const [artistSearchTerm, setArtistSearchTerm] = useState("");
+    const [isCreatingArtist, setIsCreatingArtist] = useState(false);
+    const [isArtistDropdownOpen, setIsArtistDropdownOpen] = useState(false);
+    // New Artist Form
+    const [newArtistName, setNewArtistName] = useState("");
+    const [newArtistDesc, setNewArtistDesc] = useState("");
+    const [newArtistPhoto, setNewArtistPhoto] = useState(null);
+    const [newArtistPhotoPreview, setNewArtistPhotoPreview] = useState(null);
+
+    // --- FILE STATES ---
+    const [audioFile, setAudioFile] = useState(null);
+    const [coverFile, setCoverFile] = useState(null);
+    const [canvasFile, setCanvasFile] = useState(null);
+    const [audioPreviewUrl, setAudioPreviewUrl] = useState(null);
+    const [coverPreviewUrl, setCoverPreviewUrl] = useState(null);
+
+    // --- PLAYER STATES ---
+    const [isPlaying, setIsPlaying] = useState(false);
+    const [currentTime, setCurrentTime] = useState(0);
+    const [parsedLyrics, setParsedLyrics] = useState([]);
+    const [activeLyricIndex, setActiveLyricIndex] = useState(-1);
+    const [syncIndex, setSyncIndex] = useState(0);
+
+    // --- CROPPER STATES ---
+    const [isCropperOpen, setIsCropperOpen] = useState(false);
+    const [croppingImage, setCroppingImage] = useState(null);
+    const [croppingType, setCroppingType] = useState(null); // 'cover' | 'artist'
+
+    // --- EFFECTS: FETCH ARTISTS ---
+    useEffect(() => {
+        const fetchArtists = async () => {
+            const { data } = await supabase.from('artists').select('id, name, photo_url, description').order('name');
+            setArtists(data || []);
+        };
         fetchArtists();
-      }
-    });
 
-    return () => unsubscribe();
-  }, [router]);
+        return () => {
+            if (audioPreviewUrl) URL.revokeObjectURL(audioPreviewUrl);
+            if (coverPreviewUrl) URL.revokeObjectURL(coverPreviewUrl);
+            if (newArtistPhotoPreview) URL.revokeObjectURL(newArtistPhotoPreview);
+        }
+    }, []);
 
-  const fetchArtists = async () => {
-    try {
-      const querySnapshot = await getDocs(collection(db, "artists"));
-      const artistList = querySnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }));
-      // Sort berdasarkan nama
-      artistList.sort((a, b) => a.name.localeCompare(b.name));
-      setArtists(artistList);
-      setIsLoading(false);
-    } catch (error) {
-      console.error("Error fetching artists:", error);
-      alert("Gagal memuat daftar artis.");
-      setIsLoading(false);
+    // -------------------------------------------------------------------------
+    // 🔥 FITUR BARU: AUTO PREVIEW TELEGRAM ID
+    // -------------------------------------------------------------------------
+    useEffect(() => {
+        if (!telegramFileId || telegramFileId.length < 20) return; // Minimal length disesuaikan
+
+        const delayDebounceFn = setTimeout(async () => {
+            console.log("🔍 Mendeteksi Telegram ID...");
+
+            try {
+                // Request ke API
+                const response = await fetch(`/api/get-stream-url?file_id=${telegramFileId}`);
+                const data = await response.json();
+
+                if (data.success && data.url) {
+                    console.log("✅ Stream URL Didapat:", data.url);
+
+                    // 1. Set URL ke Player
+                    setAudioPreviewUrl(data.url);
+                    setAudioFile(null); // Reset file manual
+
+                    // 2. 🔥 AMBIL DURASI DARI STREAM URL (INVISIBLE AUDIO)
+                    // Kita buat objek audio sementara di background cuma buat intip durasi
+                    const tempAudio = new Audio(data.url);
+
+                    tempAudio.onloadedmetadata = () => {
+                        if (isFinite(tempAudio.duration)) {
+                            const durMs = Math.round(tempAudio.duration * 1000);
+                            setTelegramDuration(durMs);
+                            console.log("✅ Durasi Telegram Terdeteksi:", durMs, "ms");
+                        }
+                    };
+
+                    // Hapus object audio kalau error/selesai biar hemat memori
+                    tempAudio.onerror = () => console.warn("Gagal baca metadata durasi stream");
+
+                    // 3. Extract Metadata from URL
+                    await fetchMetadata(data.url, 'url');
+
+                } else {
+                    console.warn("❌ Gagal mendapatkan link:", data.error);
+                    setAudioPreviewUrl(null);
+                    setTelegramDuration(0);
+                }
+            } catch (error) {
+                console.error("Error fetching stream:", error);
+            }
+        }, 1000);
+
+        return () => clearTimeout(delayDebounceFn);
+    }, [telegramFileId]);
+    // -------------------------------------------------------------------------
+
+
+    // --- HANDLERS ---
+    const readFile = (file) => {
+        return new Promise((resolve) => {
+            const reader = new FileReader();
+            reader.addEventListener('load', () => resolve(reader.result), false);
+            reader.readAsDataURL(file);
+        });
+    };
+
+    // Helper to fetch metadata
+    const fetchMetadata = async (source, type) => {
+        setIsMetadataLoading(true);
+        try {
+            let body;
+            let headers = {};
+
+            if (type === 'file') {
+                const formData = new FormData();
+                formData.append('file', source);
+                body = formData;
+            } else {
+                body = JSON.stringify({ url: source });
+                headers = { 'Content-Type': 'application/json' };
+            }
+
+            const res = await fetch('/api/extract-metadata', {
+                method: 'POST',
+                headers,
+                body
+            });
+
+            const data = await res.json();
+            if (data.success) {
+                console.log("Metadata extracted:", data);
+                if (data.title) setTitle(data.title);
+                if (data.artist) {
+                    setArtistSearchTerm(data.artist);
+                    // Also pre-fill new artist name just in case
+                    setNewArtistName(data.artist);
+                }
+                if (data.cover) {
+                    try {
+                        // Convert base64 to File
+                        const byteString = atob(data.cover.data);
+                        const ab = new ArrayBuffer(byteString.length);
+                        const ia = new Uint8Array(ab);
+                        for (let i = 0; i < byteString.length; i++) {
+                            ia[i] = byteString.charCodeAt(i);
+                        }
+                        const blob = new Blob([ab], { type: data.cover.mime });
+                        // Ensure filename has extension
+                        const ext = data.cover.mime.split('/')[1] || 'jpg';
+                        const file = new File([blob], `extracted_cover.${ext}`, { type: data.cover.mime });
+
+                        setCoverFile(file);
+                        setCoverPreviewUrl(URL.createObjectURL(file));
+                    } catch (e) {
+                        console.error("Error processing cover image:", e);
+                    }
+                }
+            }
+        } catch (error) {
+            console.error("Failed to extract metadata:", error);
+        } finally {
+            setIsMetadataLoading(false);
+        }
+    };
+
+    const handleNewArtistPhotoChange = async (e) => {
+        const file = e.target.files[0];
+        if (file) {
+            const imageDataUrl = await readFile(file);
+            setCroppingImage(imageDataUrl);
+            setCroppingType('artist');
+            setIsCropperOpen(true);
+            e.target.value = null; // Reset input
+        }
+    };
+
+    const handleAudioChange = async (e) => {
+        const file = e.target.files[0];
+        if (file) {
+            setAudioFile(file);
+            setAudioPreviewUrl(URL.createObjectURL(file));
+            // Kosongkan Telegram ID kalau user upload file manual (biar gak bentrok)
+            setTelegramFileId("");
+
+            // Extract Metadata
+            await fetchMetadata(file, 'file');
+        }
+    };
+
+    const handleCoverChange = async (e) => {
+        const file = e.target.files[0];
+        if (file) {
+            const imageDataUrl = await readFile(file);
+            setCroppingImage(imageDataUrl);
+            setCroppingType('cover');
+            setIsCropperOpen(true);
+            e.target.value = null; // Reset input
+        }
+    };
+
+    const handleCropComplete = (croppedBlob) => {
+        if (croppingType === 'cover') {
+            // Create a File object from Blob
+            const file = new File([croppedBlob], "cover_cropped.jpg", { type: "image/jpeg" });
+            setCoverFile(file);
+            setCoverPreviewUrl(URL.createObjectURL(croppedBlob));
+        } else if (croppingType === 'artist') {
+            const file = new File([croppedBlob], "artist_cropped.jpg", { type: "image/jpeg" });
+            setNewArtistPhoto(file);
+            setNewArtistPhotoPreview(URL.createObjectURL(croppedBlob));
+        }
+        setIsCropperOpen(false);
+        setCroppingImage(null);
+        setCroppingType(null);
+    };
+
+    const handleCanvasChange = (e) => setCanvasFile(e.target.files[0]);
+
+    const handleMoodToggle = (mood) => {
+        if (moods.includes(mood)) setMoods(moods.filter(m => m !== mood));
+        else setMoods([...moods, mood]);
+    };
+
+    const handleLyricsChange = (e) => {
+        setLyricsRaw(e.target.value);
+        setParsedLyrics(parseLrc(e.target.value));
+        setSyncIndex(0);
+    };
+
+    const handleTapSync = () => {
+        const updated = [...parsedLyrics];
+        if (!updated[syncIndex]) return;
+
+        updated[syncIndex] = { ...updated[syncIndex], time: currentTime, original: `${formatTimestamp(currentTime)} ${updated[syncIndex].text}` };
+        setParsedLyrics(updated);
+        setLyricsRaw(updated.map(l => l.original).join('\n'));
+        if (syncIndex < parsedLyrics.length - 1) setSyncIndex(p => p + 1);
+    };
+
+    const skipTime = (audioRef, seconds) => {
+        if (audioRef.current) audioRef.current.currentTime = Math.max(0, audioRef.current.currentTime - seconds);
     }
-  };
 
-  // --- 2. Handlers ---
-  const handleMoodToggle = (mood) => {
-    if (selectedMoods.includes(mood)) {
-      setSelectedMoods(selectedMoods.filter((m) => m !== mood));
-    } else {
-      setSelectedMoods([...selectedMoods, mood]);
-    }
-  };
+    // --- MAIN UPLOAD LOGIC ---
+    const handleUpload = async (e) => {
+        e.preventDefault();
 
-  const handleAudioChange = (e) => {
-    if (e.target.files && e.target.files[0]) {
-      setAudioFile(e.target.files[0]);
-    }
-  };
+        // VALIDASI
+        if (!title.trim()) return alert("Judul lagu wajib diisi.");
+        if (!coverFile) return alert("Cover image lagu wajib ada.");
+        // Audio Wajib: Entah dari File ATAU Telegram ID
+        if (!audioFile && !telegramFileId) return alert("Wajib isi Audio File atau Telegram File ID.");
 
-  const handleCoverChange = (e) => {
-    if (e.target.files && e.target.files[0]) {
-      setCoverFile(e.target.files[0]);
-    }
-  };
+        if (!isCreatingArtist && !selectedArtist) return alert("Pilih artis yang sudah ada atau buat artis baru.");
+        if (isCreatingArtist) {
+            if (!newArtistName.trim()) return alert("Nama artis baru wajib diisi.");
+            if (!newArtistPhoto) return alert("Foto artis baru wajib diupload.");
+        }
 
-  // --- 3. Core Upload Logic ---
-  const handleUpload = async (e) => {
-    e.preventDefault();
+        setIsUploading(true);
+        try {
+            const { data: { user } } = await supabase.auth.getUser();
+            if (!user) throw new Error("User not logged in");
 
-    // Validasi
-    if (!user) return alert("Silakan login kembali.");
-    if (!audioFile) return alert("File audio wajib diisi.");
-    if (!coverFile) return alert("Cover image wajib diisi.");
-    if (!title.trim()) return alert("Judul lagu wajib diisi.");
-    if (!selectedArtistId) return alert("Artis wajib dipilih.");
+            let finalArtistId = selectedArtist?.id;
 
-    try {
-      setIsUploading(true);
-      setUploadStep("Menghitung durasi audio...");
-      
-      const songId = crypto.randomUUID(); // Generate ID Unik di Client Side
-      const durationMs = await getAudioDuration(audioFile);
+            // 1. HANDLE NEW ARTIST
+            if (isCreatingArtist) {
+                setUploadStep("Mendaftarkan Artis Baru...");
+                const newArtistId = crypto.randomUUID();
 
-      // 1. Upload Cover Image ke Firebase Storage
-      setUploadStep("Mengunggah cover image...");
-      const coverExtension = coverFile.name.split('.').pop();
-      const coverRef = ref(storage, `covers/${songId}.${coverExtension}`);
-      await uploadBytes(coverRef, coverFile);
-      const coverUrl = await getDownloadURL(coverRef);
+                setUploadStep("Mengunggah Foto Artis...");
+                const artistPhotoUrl = await uploadToGithub(newArtistPhoto, newArtistId, 'artist_photo');
 
-      // 2. Upload Audio File ke Firebase Storage
-      setUploadStep("Mengunggah file audio (ini mungkin memakan waktu)...");
-      const audioExtension = audioFile.name.split('.').pop();
-      const audioRef = ref(storage, `songs/${songId}.${audioExtension}`);
-      await uploadBytes(audioRef, audioFile);
-      const audioUrl = await getDownloadURL(audioRef);
+                setUploadStep("Menyimpan Data Artis...");
+                const { error: artistErr } = await supabase.from('artists').insert({
+                    id: newArtistId, name: newArtistName, description: newArtistDesc,
+                    photo_url: artistPhotoUrl, created_by: user.id
+                });
 
-      // 3. Simpan Metadata ke Firestore
-      setUploadStep("Menyimpan metadata...");
-      
-      const songData = {
-        id: songId, // ID dokumen disamakan dengan ID unik
-        title: title,
-        artistId: selectedArtistId,
-        uploaderUserId: user.uid,
-        coverUrl: coverUrl,
-        audioUrl: audioUrl,
-        durationMs: durationMs,
-        moods: selectedMoods,
-        lyrics: lyrics,
-        playCount: 0,
-        likeCount: 0,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      };
+                if (artistErr) throw artistErr;
+                finalArtistId = newArtistId;
+            }
 
-      // Menggunakan setDoc dengan ID tertentu agar konsisten
-      await setDoc(doc(db, "songs", songId), songData);
+            // 2. HANDLE SONG FILES
+            const songId = crypto.randomUUID();
+            let finalAudioUrl = "";
+            let durationMs = 0;
+            let finalDurationMs = 0;
 
-      setUploadStep("Selesai!");
-      alert("Lagu berhasil diunggah!");
-      
-      // Reset Form
-      setTitle("");
-      setLyrics("");
-      setAudioFile(null);
-      setCoverFile(null);
-      setSelectedMoods([]);
-      // Reset input file secara visual (opsional, butuh ref)
-      
-    } catch (error) {
-      console.error("Upload Error:", error);
-      alert(`Gagal mengunggah: ${error.message}`);
-    } finally {
-      setIsUploading(false);
-      setUploadStep("");
-    }
-  };
+            // Cek apakah pakai File Manual atau Telegram
+            if (audioFile) {
+                setUploadStep("Menghitung durasi (Local File)...");
+                durationMs = await getAudioDuration(audioFile);
 
-  if (isLoading) {
-    return <div className="min-h-screen bg-black text-white flex items-center justify-center">Loading...</div>;
-  }
+                setUploadStep("Mengunggah Audio ke Supabase...");
+                const audioExt = audioFile.name.split('.').pop();
+                const audioPath = `songs/${songId}.${audioExt}`;
+                const { error: audioErr } = await supabase.storage.from('songs').upload(audioPath, audioFile);
+                if (audioErr) throw audioErr;
+                const { data: audioUrlData } = supabase.storage.from('songs').getPublicUrl(audioPath);
+                finalAudioUrl = audioUrlData.publicUrl;
+            } else if (telegramFileId) {
+                setUploadStep("Menggunakan Telegram Audio...");
 
-  return (
-    <div className="min-h-screen bg-black text-gray-200 p-6 md:p-12 font-sans">
-      <div className="max-w-3xl mx-auto">
-        <h1 className="text-3xl font-bold text-white mb-8">Upload New Song</h1>
+                // 🔥 Ambil durasi dari state yang sudah dihitung oleh useEffect tadi
+                if (telegramDuration > 0) {
+                    finalDurationMs = telegramDuration;
+                } else {
+                    // Fallback kalau gagal detect (misal koneksi lambat), coba ambil manual/0
+                    console.warn("Durasi telegram belum terdeteksi, menyimpan 0");
+                    finalDurationMs = 0;
+                }
+            }
 
-        <form onSubmit={handleUpload} className="space-y-6">
-          
-          {/* Title Input */}
-          <div className="flex flex-col gap-2">
-            <label className="font-semibold text-gray-400">Judul Lagu</label>
-            <input
-              type="text"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder="Masukkan judul lagu..."
-              className="bg-gray-900 border border-gray-700 rounded-lg p-3 text-white focus:outline-none focus:border-indigo-500"
-              required
-            />
-          </div>
+            setUploadStep("Mengunggah Cover Lagu ke GitHub...");
+            const githubCoverUrl = await uploadToGithub(coverFile, songId, 'cover');
 
-          {/* Artist Select */}
-          <div className="flex flex-col gap-2">
-            <label className="font-semibold text-gray-400">Artis</label>
-            <select
-              value={selectedArtistId}
-              onChange={(e) => setSelectedArtistId(e.target.value)}
-              className="bg-gray-900 border border-gray-700 rounded-lg p-3 text-white focus:outline-none focus:border-indigo-500"
-              required
-            >
-              <option value="" disabled>Pilih Artis</option>
-              {artists.map((artist) => (
-                <option key={artist.id} value={artist.id}>
-                  {artist.name}
-                </option>
-              ))}
-            </select>
-            <p className="text-xs text-gray-500">*Pastikan data artis sudah dibuat di menu Artists.</p>
-          </div>
+            let githubCanvasUrl = null;
+            if (canvasFile) {
+                setUploadStep("Mengunggah Canvas ke GitHub...");
+                githubCanvasUrl = await uploadToGithub(canvasFile, songId, 'canvas');
+            }
 
-          {/* Files Input Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* Audio File */}
-            <div className="flex flex-col gap-2">
-              <label className="font-semibold text-gray-400">File Audio (MP3/WAV)</label>
-              <input
-                type="file"
-                accept="audio/*"
-                onChange={handleAudioChange}
-                className="bg-gray-900 border border-gray-700 rounded-lg p-2 text-sm text-gray-300 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-indigo-600 file:text-white hover:file:bg-indigo-700"
-                required
-              />
-              {audioFile && <p className="text-xs text-green-400">Selected: {audioFile.name}</p>}
+            // 3. INSERT SONG DB
+            setUploadStep("Menyimpan Metadata Lagu...");
+            const { error: dbError } = await supabase.from('songs').insert({
+                id: songId, title: title, artist_id: finalArtistId, uploader_user_id: user.id,
+                audio_url: finalAudioUrl || null, // Kosong jika pakai Telegram
+                telegram_audio_file_id: telegramFileId || null,
+                cover_url: githubCoverUrl, canvas_url: githubCanvasUrl,
+                lyrics: lyricsRaw, duration_ms: finalDurationMs, moods: moods,
+                language: language,
+                play_count: 0, like_count: 0
+            });
+
+            if (dbError) throw dbError;
+
+            setUploadStep("Selesai!");
+            alert("Lagu berhasil dipublish!");
+            router.push('/remusic/music');
+
+        } catch (error) {
+            console.error("Upload Error:", error);
+            alert(`Gagal upload: ${error.message}`);
+        } finally {
+            setIsUploading(false);
+            setUploadStep("");
+        }
+    };
+
+    const theme = isDarkMode
+        ? { bg: 'bg-[#081028]', text: 'text-white', textMuted: 'text-slate-400', border: 'border-slate-800', cardBg: 'bg-[#0f172a]', inputBg: 'bg-[#1e293b]', iconColor: 'text-indigo-400', scrollHide: '[&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]', hover: 'hover:bg-slate-800', targetRow: 'border-emerald-500 bg-emerald-900/10 shadow-[0_0_15px_rgba(16,185,129,0.1)]', activeRow: 'bg-indigo-900/40 border-indigo-500/50' }
+        : { bg: 'bg-white', text: 'text-slate-900', textMuted: 'text-slate-500', border: 'border-slate-200', cardBg: 'bg-slate-50', inputBg: 'bg-white', iconColor: 'text-blue-600', scrollHide: '[&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]', hover: 'hover:bg-slate-100', targetRow: 'border-emerald-500 bg-emerald-50 shadow-sm', activeRow: 'bg-blue-50 border-blue-400' };
+
+    if (!mounted) return null; // Prevent hydration mismatch
+
+    return (
+        <div className={`min-h-screen ${theme.bg} ${theme.text} font-sans flex flex-col`}>
+            {/* HEADER */}
+            <div className={`flex justify-between items-center px-4 md:px-8 py-4 border-b ${theme.border} sticky top-0 z-50 ${theme.bg}/95 backdrop-blur-sm`}>
+                <div className="flex items-center gap-4">
+                    <button onClick={() => router.back()} className={`p-2 rounded-full hover:bg-white/10 ${theme.textMuted}`}><X size={24} /></button>
+                    <div className="flex items-center gap-3">
+                        <div className={`p-2 rounded-xl ${isDarkMode ? 'bg-indigo-500/10' : 'bg-blue-100'}`}><Upload className={theme.iconColor} size={20} /></div>
+                        <h1 className="text-xl font-bold tracking-tight hidden md:block">Upload New Song</h1>
+                    </div>
+                </div>
+                <div className="flex items-center gap-3">
+                    {/* Toggle button removed, theme is now automatic */}
+                    <button onClick={handleUpload} disabled={isUploading} className={`hidden md:flex px-6 py-2 rounded-xl text-sm font-bold text-white shadow-lg items-center gap-2 transition-all ${isUploading ? 'bg-slate-600 cursor-not-allowed' : 'bg-indigo-600 hover:bg-indigo-500 active:scale-95'}`}>
+                        {isUploading ? <><Loader2 className="animate-spin" size={16} /> {uploadStep || "Uploading..."}</> : <><Save size={16} /> Publish</>}
+                    </button>
+                </div>
             </div>
 
-            {/* Cover Image */}
-            <div className="flex flex-col gap-2">
-              <label className="font-semibold text-gray-400">Cover Image</label>
-              <input
-                type="file"
-                accept="image/*"
-                onChange={handleCoverChange}
-                className="bg-gray-900 border border-gray-700 rounded-lg p-2 text-sm text-gray-300 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-indigo-600 file:text-white hover:file:bg-indigo-700"
-                required
-              />
-              {coverFile && <p className="text-xs text-green-400">Selected: {coverFile.name}</p>}
-            </div>
-          </div>
+            <div className="flex-1 flex flex-col lg:flex-row overflow-hidden h-[calc(100vh-73px)]">
+                {/* LEFT COLUMN: Inputs */}
+                <div className={`w-full lg:w-[35%] flex flex-col border-b lg:border-b-0 lg:border-r ${theme.border} ${theme.scrollHide} overflow-y-auto`}>
+                    <div className="p-6 space-y-8">
+                        <FileUploadSection
+                            theme={theme}
+                            handleAudioChange={handleAudioChange} telegramFileId={telegramFileId} setTelegramFileId={setTelegramFileId}
+                            coverPreviewUrl={coverPreviewUrl} handleCoverChange={handleCoverChange}
+                            handleCanvasChange={handleCanvasChange}
+                        />
 
-          {/* Moods Selection */}
-          <div className="flex flex-col gap-3">
-            <label className="font-semibold text-gray-400">Moods</label>
-            <div className="flex flex-wrap gap-2">
-              {availableMoods.map((mood) => (
-                <button
-                  key={mood}
-                  type="button"
-                  onClick={() => handleMoodToggle(mood)}
-                  className={`px-4 py-2 rounded-full text-sm font-medium transition-all ${
-                    selectedMoods.includes(mood)
-                      ? "bg-indigo-600 text-white border border-indigo-500"
-                      : "bg-gray-800 text-gray-400 border border-gray-700 hover:bg-gray-700"
-                  }`}
-                >
-                  {mood}
+                        <ArtistSelector
+                            theme={theme}
+                            artists={artists} selectedArtist={selectedArtist} setSelectedArtist={setSelectedArtist}
+                            isCreatingArtist={isCreatingArtist} setIsCreatingArtist={setIsCreatingArtist}
+                            artistSearchTerm={artistSearchTerm} setArtistSearchTerm={setArtistSearchTerm}
+                            isDropdownOpen={isArtistDropdownOpen} setIsDropdownOpen={setIsArtistDropdownOpen}
+                            newArtistName={newArtistName} setNewArtistName={setNewArtistName}
+                            newArtistDesc={newArtistDesc} setNewArtistDesc={setNewArtistDesc}
+                            newArtistPhotoPreview={newArtistPhotoPreview} handleNewArtistPhotoChange={handleNewArtistPhotoChange}
+                        />
+
+                        <MetadataForm
+                            theme={theme}
+                            title={title} setTitle={setTitle} language={language} setLanguage={setLanguage}
+                            moods={moods} handleMoodToggle={handleMoodToggle}
+                            lyricsRaw={lyricsRaw} handleLyricsChange={handleLyricsChange}
+                        />
+                    </div>
+                </div>
+
+                {/* RIGHT COLUMN: Visual Editor */}
+                <VisualSyncEditor
+                    theme={theme} isDarkMode={isDarkMode}
+                    title={title} selectedArtist={selectedArtist} newArtistName={newArtistName} isCreatingArtist={isCreatingArtist}
+                    coverPreviewUrl={coverPreviewUrl} audioPreviewUrl={audioPreviewUrl}
+                    isPlaying={isPlaying} setIsPlaying={setIsPlaying}
+                    currentTime={currentTime} setCurrentTime={setCurrentTime}
+                    parsedLyrics={parsedLyrics} syncIndex={syncIndex} setSyncIndex={setSyncIndex}
+                    activeLyricIndex={activeLyricIndex} setActiveLyricIndex={setActiveLyricIndex}
+                    handleTapSync={handleTapSync} skipTime={skipTime}
+                />
+            </div>
+
+            {/* Mobile Save Button */}
+            <div className={`md:hidden p-4 border-t ${theme.border} ${theme.bg} sticky bottom-0 z-50`}>
+                <div className="text-xs opacity-50 text-center mb-2">{uploadStep || "Ready to upload"}</div>
+                <button onClick={handleUpload} disabled={isUploading} className={`w-full py-3 rounded-xl font-bold text-white shadow-lg flex items-center justify-center gap-2 ${isUploading ? 'bg-slate-600' : 'bg-indigo-600 active:scale-95'}`}>
+                    {isUploading ? <><Loader2 className="animate-spin" size={16} /> Uploading...</> : <><Save size={18} /> Publish Song</>}
                 </button>
-              ))}
             </div>
-          </div>
 
-          {/* Lyrics Input */}
-          <div className="flex flex-col gap-2">
-            <label className="font-semibold text-gray-400">Lirik Lagu (Opsional)</label>
-            <textarea
-              value={lyrics}
-              onChange={(e) => setLyrics(e.target.value)}
-              placeholder="Tulis lirik lagu di sini..."
-              rows={6}
-              className="bg-gray-900 border border-gray-700 rounded-lg p-3 text-white focus:outline-none focus:border-indigo-500 resize-y"
-            />
-          </div>
-
-          {/* Submit Button & Progress */}
-          <div className="pt-4">
-            <button
-              type="submit"
-              disabled={isUploading}
-              className={`w-full py-4 rounded-xl font-bold text-lg shadow-lg transition-all ${
-                isUploading
-                  ? "bg-gray-700 text-gray-400 cursor-not-allowed"
-                  : "bg-indigo-600 hover:bg-indigo-500 text-white shadow-indigo-500/20"
-              }`}
-            >
-              {isUploading ? (
-                <span className="flex items-center justify-center gap-2">
-                  <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                  </svg>
-                  Processing...
-                </span>
-              ) : (
-                "Upload Song"
-              )}
-            </button>
-            
-            {/* Status Text */}
-            {isUploading && (
-              <p className="text-center text-indigo-400 mt-3 text-sm animate-pulse">
-                {uploadStep}
-              </p>
+            {/* CROPPER MODAL */}
+            {isCropperOpen && (
+                <ImageCropperModal
+                    imageSrc={croppingImage}
+                    aspect={1}
+                    onCropComplete={handleCropComplete}
+                    onClose={() => { setIsCropperOpen(false); setCroppingImage(null); }}
+                    theme={theme}
+                />
             )}
-          </div>
 
-        </form>
-      </div>
-    </div>
-  );
+            {/* METADATA LOADING MODAL */}
+            {isMetadataLoading && <MetadataLoadingModal theme={theme} />}
+        </div>
+    );
 }

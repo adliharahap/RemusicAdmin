@@ -1,20 +1,20 @@
 "use client";
 
 import { Provider } from "react-redux";
-import { PersistGate } from "redux-persist/integration/react"; // Import ini
-import { store, persistor } from "../store"; // Import persistor juga
+import { PersistGate } from "redux-persist/integration/react";
+import { store, persistor } from "../store";
 import AuthListener from "./AuthListener";
+import { ThemeProvider } from "next-themes";
 
 export default function ClientProvider({ children }) {
   return (
     <Provider store={store}>
-      {/* loading={null} bisa diganti dengan komponen <Loading /> 
-        jika ingin menampilkan spinner saat membaca local storage 
-      */}
       <PersistGate loading={null} persistor={persistor}>
-        <AuthListener>
-          {children}
-        </AuthListener>
+        <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
+          <AuthListener>
+            {children}
+          </AuthListener>
+        </ThemeProvider>
       </PersistGate>
     </Provider>
   );
