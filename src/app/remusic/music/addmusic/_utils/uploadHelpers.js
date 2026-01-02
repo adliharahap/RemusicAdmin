@@ -1,25 +1,50 @@
+// --- UPLOAD HELPER (UPDATED TO USE FORMDATA) ---
 export const uploadToGithub = async (file, id, type) => {
     if (!file) return null;
-    const base64 = await new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.readAsDataURL(file);
-        reader.onload = () => resolve(reader.result.split(',')[1]);
-        reader.onerror = error => reject(error);
-    });
 
+    // Tentukan ekstensi dan path (sesuai logic kamu sebelumnya)
     const ext = file.name.split('.').pop();
-    let path = type === 'artist_photo' ? `artists/${id}/${id}.${ext}` : `uploads/${id}/${type}_${id}.${ext}`;
+    let path = type === 'artist_photo' 
+        ? `artists/${id}/${id}.${ext}` 
+        : `uploads/${id}/${type}_${id}.${ext}`;
     
+    // PERUBAHAN UTAMA DI SINI:
+    // Kita pakai FormData untuk mengirim file binary langsung (lebih hemat memori & lolos limit JSON)
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('path', path);
+    formData.append('message', `Upload ${type} for ID ${id}`);
+
     const response = await fetch('/api/github-upload', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ content: base64, path, message: `Upload ${type} for ID ${id}` })
+        // PENTING: JANGAN set 'Content-Type': 'application/json'
+        // Browser akan otomatis set boundary multipart/form-data
+        body: formData
     });
 
+    // Handle Error yang lebih rapi
+    if (!response.ok) {
+        // Cek khusus jika error 413 (File terlalu besar)
+        if (response.status === 413) {
+            throw new Error("File terlalu besar (Server Limit). Coba kurangi ukuran/resolusi.");
+        }
+
+        // Coba baca error sebagai JSON, kalau gagal baca sebagai Text
+        const errorText = await response.text();
+        try {
+            const errorJson = JSON.parse(errorText);
+            throw new Error(errorJson.error || 'Upload failed');
+        } catch (e) {
+            // Jika response bukan JSON (misal HTML error dari Vercel/Next.js)
+            throw new Error(`Upload Failed (${response.status}): ${errorText.substring(0, 100)}...`);
+        }
+    }
+
     const data = await response.json();
-    if (!response.ok) throw new Error(data.error || 'Upload failed');
     return data.url;
 };
+
+// --- UTILS LAINNYA (TETAP SAMA) ---
 
 export const parseLrc = (lrcString) => {
     if (!lrcString) return [];

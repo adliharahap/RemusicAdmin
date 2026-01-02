@@ -9,6 +9,7 @@ import {
     ImageIcon
 } from 'lucide-react';
 import { useTheme } from 'next-themes';
+import { supabase } from '../../../../../lib/supabaseClient';
 
 // --- HELPER: Parse Lirik LRC ---
 const parseLrc = (lrcString) => {
@@ -258,14 +259,30 @@ export default function EditSongModal({ isOpen, onClose, song, onSuccess }) {
         e.preventDefault();
         setIsSaving(true);
         try {
-            // Simulasi save
-            await new Promise(resolve => setTimeout(resolve, 1000));
-            console.log("Saving lyrics:", formData.lyrics);
+            // Prepare update data
+            const updates = {
+                lyrics: formData.lyrics,
+                telegram_audio_file_id: formData.telegram_audio_file_id || null,
+                audio_url: formData.audio_url || null,
+                cover_url: formData.cover_url || null,
+                canvas_url: formData.canvas_url || null,
+                updated_at: new Date().toISOString(),
+            };
+
+            // Update Supabase
+            const { error } = await supabase
+                .from('songs')
+                .update(updates)
+                .eq('id', formData.id);
+
+            if (error) throw error;
+
+            console.log("Song updated successfully:", updates);
             if (onSuccess) onSuccess();
             onClose();
         } catch (error) {
-            console.error("Error:", error);
-            alert("Gagal update lagu.");
+            console.error("Error updating song:", error);
+            alert(`Gagal update lagu: ${error.message}`);
         } finally {
             setIsSaving(false);
         }

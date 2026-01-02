@@ -13,6 +13,7 @@ import MetadataForm from './_components/MetadataForm';
 import VisualSyncEditor from './_components/VisualSyncEditor';
 import ImageCropperModal from './_components/ImageCropperModal';
 import MetadataLoadingModal from './_components/MetadataLoadingModal';
+import UploadStatusModal from './_components/UploadStatusModal';
 
 export default function UploadSongPage() {
     const router = useRouter();
@@ -27,8 +28,13 @@ export default function UploadSongPage() {
     const isDarkMode = mounted ? resolvedTheme === 'dark' : true; // Default to dark if not mounted yet or prefer dark
 
     const [isUploading, setIsUploading] = useState(false);
-    const [uploadStep, setUploadStep] = useState("");
+    // const [uploadStep, setUploadStep] = useState(""); // Diganti dengan Modal Steps
     const [isMetadataLoading, setIsMetadataLoading] = useState(false);
+
+    // --- UPLOAD MODAL STATES ---
+    const [uploadSteps, setUploadSteps] = useState([]);
+    const [showUploadModal, setShowUploadModal] = useState(false);
+    const [isUploadCompleted, setIsUploadCompleted] = useState(false);
 
     // --- FORM STATES ---
     const [title, setTitle] = useState("");
@@ -37,6 +43,7 @@ export default function UploadSongPage() {
     const [lyricsRaw, setLyricsRaw] = useState("");
     const [telegramFileId, setTelegramFileId] = useState("");
     const [telegramDuration, setTelegramDuration] = useState(0);
+    const [localDuration, setLocalDuration] = useState(0);
 
     // --- ARTIST STATES ---
     const [artists, setArtists] = useState([]);
@@ -225,6 +232,10 @@ export default function UploadSongPage() {
             // Kosongkan Telegram ID kalau user upload file manual (biar gak bentrok)
             setTelegramFileId("");
 
+            // Calculate Duration
+            const dur = await getAudioDuration(file);
+            setLocalDuration(dur);
+
             // Extract Metadata
             await fetchMetadata(file, 'file');
         }
@@ -284,14 +295,13 @@ export default function UploadSongPage() {
         if (audioRef.current) audioRef.current.currentTime = Math.max(0, audioRef.current.currentTime - seconds);
     }
 
-    // --- MAIN UPLOAD LOGIC ---
+    // --- MAIN UPLOAD LOGIC (REFACTORED) ---
     const handleUpload = async (e) => {
         e.preventDefault();
 
-        // VALIDASI
+        // 1. VALIDASI INPUT
         if (!title.trim()) return alert("Judul lagu wajib diisi.");
         if (!coverFile) return alert("Cover image lagu wajib ada.");
-        // Audio Wajib: Entah dari File ATAU Telegram ID
         if (!audioFile && !telegramFileId) return alert("Wajib isi Audio File atau Telegram File ID.");
 
         if (!isCreatingArtist && !selectedArtist) return alert("Pilih artis yang sudah ada atau buat artis baru.");
@@ -300,95 +310,186 @@ export default function UploadSongPage() {
             if (!newArtistPhoto) return alert("Foto artis baru wajib diupload.");
         }
 
+        // 2. PERSIAPAN STEPS
+        const steps = [];
+
+        // Step Artist
+        if (isCreatingArtist) {
+            steps.push({ id: 'artist_db', label: 'Mendaftarkan Artis Baru (Database)', status: 'pending' });
+            steps.push({ id: 'artist_upload', label: 'Mengunggah Foto Artis', status: 'pending' });
+        }
+
+        // Step Song DB
+        steps.push({ id: 'song_db', label: 'Menyimpan Metadata Lagu (Database)', status: 'pending' });
+
+        // Step Files Upload
+        if (audioFile) steps.push({ id: 'audio_upload', label: 'Mengunggah File Audio', status: 'pending' });
+        steps.push({ id: 'cover_upload', label: 'Mengunggah Cover Lagu', status: 'pending' });
+        if (canvasFile) steps.push({ id: 'canvas_upload', label: 'Mengunggah Canvas', status: 'pending' });
+
+        setUploadSteps(steps);
+        setShowUploadModal(true);
         setIsUploading(true);
+        setIsUploadCompleted(false);
+
+        // Helper untuk update status step
+        const updateStepStatus = (id, status, error = null) => {
+            setUploadSteps(prev => prev.map(s => s.id === id ? { ...s, status, error } : s));
+        };
+
         try {
             const { data: { user } } = await supabase.auth.getUser();
             if (!user) throw new Error("User not logged in");
 
             let finalArtistId = selectedArtist?.id;
+            const songId = crypto.randomUUID();
 
-            // 1. HANDLE NEW ARTIST
+            // ---------------------------------------------------------
+            // 3. EKSEKUSI: ARTIST DB (Jika Baru)
+            // ---------------------------------------------------------
             if (isCreatingArtist) {
-                setUploadStep("Mendaftarkan Artis Baru...");
+                updateStepStatus('artist_db', 'loading');
                 const newArtistId = crypto.randomUUID();
 
-                setUploadStep("Mengunggah Foto Artis...");
-                const artistPhotoUrl = await uploadToGithub(newArtistPhoto, newArtistId, 'artist_photo');
-
-                setUploadStep("Menyimpan Data Artis...");
+                // Insert Artist dengan photo_url NULL dulu (atau placeholder)
                 const { error: artistErr } = await supabase.from('artists').insert({
-                    id: newArtistId, name: newArtistName, description: newArtistDesc,
-                    photo_url: artistPhotoUrl, created_by: user.id
+                    id: newArtistId,
+                    name: newArtistName,
+                    description: newArtistDesc,
+                    photo_url: null, // Akan diupdate setelah upload
+                    created_by: user.id
                 });
 
-                if (artistErr) throw artistErr;
+                if (artistErr) {
+                    updateStepStatus('artist_db', 'error', artistErr.message);
+                    throw artistErr;
+                }
+
                 finalArtistId = newArtistId;
+                updateStepStatus('artist_db', 'success');
             }
 
-            // 2. HANDLE SONG FILES
-            const songId = crypto.randomUUID();
-            let finalAudioUrl = "";
-            let durationMs = 0;
+            // ---------------------------------------------------------
+            // 4. EKSEKUSI: SONG DB
+            // ---------------------------------------------------------
+            updateStepStatus('song_db', 'loading');
+
+            // Hitung durasi dulu jika perlu (ini cepat jadi bisa digabung step DB)
             let finalDurationMs = 0;
-
-            // Cek apakah pakai File Manual atau Telegram
             if (audioFile) {
-                setUploadStep("Menghitung durasi (Local File)...");
-                durationMs = await getAudioDuration(audioFile);
-
-                setUploadStep("Mengunggah Audio ke Supabase...");
-                const audioExt = audioFile.name.split('.').pop();
-                const audioPath = `songs/${songId}.${audioExt}`;
-                const { error: audioErr } = await supabase.storage.from('songs').upload(audioPath, audioFile);
-                if (audioErr) throw audioErr;
-                const { data: audioUrlData } = supabase.storage.from('songs').getPublicUrl(audioPath);
-                finalAudioUrl = audioUrlData.publicUrl;
+                finalDurationMs = await getAudioDuration(audioFile);
             } else if (telegramFileId) {
-                setUploadStep("Menggunakan Telegram Audio...");
+                finalDurationMs = telegramDuration > 0 ? telegramDuration : 0;
+            }
 
-                // 🔥 Ambil durasi dari state yang sudah dihitung oleh useEffect tadi
-                if (telegramDuration > 0) {
-                    finalDurationMs = telegramDuration;
-                } else {
-                    // Fallback kalau gagal detect (misal koneksi lambat), coba ambil manual/0
-                    console.warn("Durasi telegram belum terdeteksi, menyimpan 0");
-                    finalDurationMs = 0;
+            // Insert Song dengan URL NULL dulu
+            const { error: dbError } = await supabase.from('songs').insert({
+                id: songId,
+                title: title,
+                artist_id: finalArtistId,
+                uploader_user_id: user.id,
+                audio_url: null, // Update nanti
+                telegram_audio_file_id: telegramFileId || null,
+                cover_url: null, // Update nanti
+                canvas_url: null, // Update nanti
+                lyrics: lyricsRaw,
+                duration_ms: finalDurationMs,
+                moods: moods,
+                language: language,
+                play_count: 0,
+                like_count: 0
+            });
+
+            if (dbError) {
+                updateStepStatus('song_db', 'error', dbError.message);
+                throw dbError;
+            }
+            updateStepStatus('song_db', 'success');
+
+            // ---------------------------------------------------------
+            // 5. EKSEKUSI: UPLOAD FILES & UPDATE DB
+            // ---------------------------------------------------------
+
+            // A. UPLOAD ARTIST PHOTO (Jika Baru)
+            if (isCreatingArtist) {
+                updateStepStatus('artist_upload', 'loading');
+                try {
+                    const artistPhotoUrl = await uploadToGithub(newArtistPhoto, finalArtistId, 'artist_photo');
+
+                    // Update DB
+                    await supabase.from('artists').update({ photo_url: artistPhotoUrl }).eq('id', finalArtistId);
+
+                    updateStepStatus('artist_upload', 'success');
+                } catch (err) {
+                    console.error(err);
+                    updateStepStatus('artist_upload', 'error', "Gagal upload foto artis, tapi data artis tersimpan.");
+                    // Kita tidak throw error di sini agar proses lain tetap lanjut? 
+                    // User minta "dipisah pisah apa yang berhasil dan apa yang gagal".
+                    // Jadi kita lanjut ke file lagu.
                 }
             }
 
-            setUploadStep("Mengunggah Cover Lagu ke GitHub...");
-            const githubCoverUrl = await uploadToGithub(coverFile, songId, 'cover');
+            // B. UPLOAD AUDIO (Supabase)
+            if (audioFile) {
+                updateStepStatus('audio_upload', 'loading');
+                try {
+                    const audioExt = audioFile.name.split('.').pop();
+                    const audioPath = `songs/${songId}.${audioExt}`;
+                    const { error: audioErr } = await supabase.storage.from('songs').upload(audioPath, audioFile);
+                    if (audioErr) throw audioErr;
 
-            let githubCanvasUrl = null;
-            if (canvasFile) {
-                setUploadStep("Mengunggah Canvas ke GitHub...");
-                githubCanvasUrl = await uploadToGithub(canvasFile, songId, 'canvas');
+                    const { data: audioUrlData } = supabase.storage.from('songs').getPublicUrl(audioPath);
+                    const finalAudioUrl = audioUrlData.publicUrl;
+
+                    // Update DB
+                    await supabase.from('songs').update({ audio_url: finalAudioUrl }).eq('id', songId);
+
+                    updateStepStatus('audio_upload', 'success');
+                } catch (err) {
+                    console.error(err);
+                    updateStepStatus('audio_upload', 'error', "Gagal upload audio.");
+                }
             }
 
-            // 3. INSERT SONG DB
-            setUploadStep("Menyimpan Metadata Lagu...");
-            const { error: dbError } = await supabase.from('songs').insert({
-                id: songId, title: title, artist_id: finalArtistId, uploader_user_id: user.id,
-                audio_url: finalAudioUrl || null, // Kosong jika pakai Telegram
-                telegram_audio_file_id: telegramFileId || null,
-                cover_url: githubCoverUrl, canvas_url: githubCanvasUrl,
-                lyrics: lyricsRaw, duration_ms: finalDurationMs, moods: moods,
-                language: language,
-                play_count: 0, like_count: 0
-            });
+            // C. UPLOAD COVER (GitHub)
+            updateStepStatus('cover_upload', 'loading');
+            try {
+                const githubCoverUrl = await uploadToGithub(coverFile, songId, 'cover');
 
-            if (dbError) throw dbError;
+                // Update DB
+                await supabase.from('songs').update({ cover_url: githubCoverUrl }).eq('id', songId);
 
-            setUploadStep("Selesai!");
-            alert("Lagu berhasil dipublish!");
-            router.push('/remusic/music');
+                updateStepStatus('cover_upload', 'success');
+            } catch (err) {
+                console.error(err);
+                updateStepStatus('cover_upload', 'error', "Gagal upload cover.");
+            }
+
+            // D. UPLOAD CANVAS (GitHub) - Optional
+            if (canvasFile) {
+                updateStepStatus('canvas_upload', 'loading');
+                try {
+                    const githubCanvasUrl = await uploadToGithub(canvasFile, songId, 'canvas');
+
+                    // Update DB
+                    await supabase.from('songs').update({ canvas_url: githubCanvasUrl }).eq('id', songId);
+
+                    updateStepStatus('canvas_upload', 'success');
+                } catch (err) {
+                    console.error(err);
+                    updateStepStatus('canvas_upload', 'error', "Gagal upload canvas.");
+                }
+            }
+
+            setIsUploadCompleted(true);
+            // Jangan redirect otomatis biar user lihat status dulu
+            // router.push('/remusic/music'); 
 
         } catch (error) {
-            console.error("Upload Error:", error);
-            alert(`Gagal upload: ${error.message}`);
+            console.error("Critical Upload Error:", error);
+            // Error critical (biasanya di step DB) sudah di-handle di updateStepStatus masing-masing
         } finally {
             setIsUploading(false);
-            setUploadStep("");
         }
     };
 
@@ -412,7 +513,7 @@ export default function UploadSongPage() {
                 <div className="flex items-center gap-3">
                     {/* Toggle button removed, theme is now automatic */}
                     <button onClick={handleUpload} disabled={isUploading} className={`hidden md:flex px-6 py-2 rounded-xl text-sm font-bold text-white shadow-lg items-center gap-2 transition-all ${isUploading ? 'bg-slate-600 cursor-not-allowed' : 'bg-indigo-600 hover:bg-indigo-500 active:scale-95'}`}>
-                        {isUploading ? <><Loader2 className="animate-spin" size={16} /> {uploadStep || "Uploading..."}</> : <><Save size={16} /> Publish</>}
+                        {isUploading ? <><Loader2 className="animate-spin" size={16} /> Uploading...</> : <><Save size={16} /> Publish</>}
                     </button>
                 </div>
             </div>
@@ -426,6 +527,7 @@ export default function UploadSongPage() {
                             handleAudioChange={handleAudioChange} telegramFileId={telegramFileId} setTelegramFileId={setTelegramFileId}
                             coverPreviewUrl={coverPreviewUrl} handleCoverChange={handleCoverChange}
                             handleCanvasChange={handleCanvasChange}
+                            duration={telegramFileId ? telegramDuration : localDuration}
                         />
 
                         <ArtistSelector
@@ -463,7 +565,7 @@ export default function UploadSongPage() {
 
             {/* Mobile Save Button */}
             <div className={`md:hidden p-4 border-t ${theme.border} ${theme.bg} sticky bottom-0 z-50`}>
-                <div className="text-xs opacity-50 text-center mb-2">{uploadStep || "Ready to upload"}</div>
+                {/* <div className="text-xs opacity-50 text-center mb-2">{uploadStep || "Ready to upload"}</div> */}
                 <button onClick={handleUpload} disabled={isUploading} className={`w-full py-3 rounded-xl font-bold text-white shadow-lg flex items-center justify-center gap-2 ${isUploading ? 'bg-slate-600' : 'bg-indigo-600 active:scale-95'}`}>
                     {isUploading ? <><Loader2 className="animate-spin" size={16} /> Uploading...</> : <><Save size={18} /> Publish Song</>}
                 </button>
@@ -482,6 +584,18 @@ export default function UploadSongPage() {
 
             {/* METADATA LOADING MODAL */}
             {isMetadataLoading && <MetadataLoadingModal theme={theme} />}
+
+            {/* UPLOAD STATUS MODAL */}
+            <UploadStatusModal
+                isOpen={showUploadModal}
+                steps={uploadSteps}
+                isCompleted={isUploadCompleted}
+                onClose={() => {
+                    setShowUploadModal(false);
+                    if (isUploadCompleted) router.push('/remusic/music');
+                }}
+                theme={theme}
+            />
         </div>
     );
 }

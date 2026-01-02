@@ -8,8 +8,19 @@ export default function FileUploadSection({
     // Props Cover
     coverPreviewUrl, handleCoverChange,
     // Props Canvas
-    handleCanvasChange
+    handleCanvasChange,
+    // Props Duration
+    duration = 0
 }) {
+    // Format Duration Helper
+    const formatDuration = (ms) => {
+        if (!ms) return "0:00";
+        const totalSeconds = Math.floor(ms / 1000);
+        const minutes = Math.floor(totalSeconds / 60);
+        const seconds = totalSeconds % 60;
+        return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+    };
+
     return (
         <div className={`p-5 rounded-2xl ${theme.cardBg} border ${theme.border} space-y-5 relative`}>
             <div className="absolute top-4 right-4 text-xs opacity-50 flex items-center gap-1">
@@ -19,7 +30,14 @@ export default function FileUploadSection({
 
             {/* Audio Source */}
             <div className="space-y-3 p-3 rounded-xl bg-slate-900/20 border border-dashed border-slate-700">
-                <label className="text-xs font-bold text-indigo-400 uppercase">Audio Source</label>
+                <div className="flex justify-between items-center">
+                    <label className="text-xs font-bold text-indigo-400 uppercase">Audio Source</label>
+                    {duration > 0 && (
+                        <span className="text-[10px] font-mono bg-indigo-500/20 text-indigo-400 px-2 py-0.5 rounded-full">
+                            Duration: {formatDuration(duration)}
+                        </span>
+                    )}
+                </div>
 
                 <div>
                     <label className="text-xs font-semibold flex items-center gap-2 mb-2">
