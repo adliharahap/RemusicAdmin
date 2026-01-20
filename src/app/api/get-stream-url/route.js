@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server';
 
+export const dynamic = 'force-dynamic';
+
 export async function GET(req) {
     // 1. Ambil file_id dari URL (?file_id=...)
     const { searchParams } = new URL(req.url);
@@ -17,7 +19,10 @@ export async function GET(req) {
 
     try {
         // 2. Tanya ke Telegram API: "File ID ini path-nya di mana?"
-        const response = await fetch(`https://api.telegram.org/bot${botToken}/getFile?file_id=${fileId}`);
+        const response = await fetch(`https://api.telegram.org/bot${botToken}/getFile?file_id=${fileId}`, {
+            next: { revalidate: 3000 } 
+        });
+
         const data = await response.json();
 
         // Cek jika Telegram menolak (misal ID salah atau kadaluarsa)

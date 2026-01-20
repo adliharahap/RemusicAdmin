@@ -544,7 +544,7 @@ export default function UploadSongPage() {
                         <MetadataForm
                             theme={theme}
                             title={title} setTitle={setTitle} language={language} setLanguage={setLanguage}
-                            moods={moods} handleMoodToggle={handleMoodToggle}
+                            moods={moods} handleMoodToggle={handleMoodToggle} setMoods={setMoods}
                             lyricsRaw={lyricsRaw} handleLyricsChange={handleLyricsChange}
                         />
                     </div>

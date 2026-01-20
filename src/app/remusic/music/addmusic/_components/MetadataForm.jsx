@@ -139,17 +139,69 @@ export default function MetadataForm({
     theme,
     title, setTitle,
     language, setLanguage,
-    moods, handleMoodToggle,
+    moods, handleMoodToggle, setMoods,
     lyricsRaw, handleLyricsChange
 }) {
     // State lokal untuk pencarian mood (tidak perlu dikirim ke parent)
     const [searchTerm, setSearchTerm] = useState("");
+    const [isAnalyzingMood, setIsAnalyzingMood] = useState(false);
+    const [isTranslating, setIsTranslating] = useState(false);
+
+    const handleAnalyzeMood = async () => {
+        if (!lyricsRaw.trim()) return alert("Lyrics cannot be empty for mood analysis.");
+        setIsAnalyzingMood(true);
+        try {
+            const res = await fetch('/api/ai-generate', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ type: 'mood', text: lyricsRaw })
+            });
+            const data = await res.json();
+            if (data.success && data.moods) {
+                // Merge with existing moods or replace? Let's merge unique
+                const newMoods = [...new Set([...moods, ...data.moods])];
+                setMoods(newMoods);
+            } else {
+                alert("Failed to analyze mood: " + (data.error || "Unknown error"));
+            }
+        } catch (error) {
+            console.error(error);
+            alert("Error analyzing mood");
+        } finally {
+            setIsAnalyzingMood(false);
+        }
+    };
+
+    const handleTranslateLyrics = async () => {
+        if (!lyricsRaw.trim()) return alert("Lyrics cannot be empty for translation.");
+        setIsTranslating(true);
+        try {
+            const res = await fetch('/api/ai-generate', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ type: 'translate', text: lyricsRaw })
+            });
+            const data = await res.json();
+            if (data.success && data.translation) {
+                // The API now returns "[timestamp] original | translation"
+                // So we just replace the whole content
+                handleLyricsChange({ target: { value: data.translation } });
+            } else {
+                alert("Failed to translate: " + (data.error || "Unknown error"));
+            }
+        } catch (error) {
+            console.error(error);
+            alert("Error translating lyrics");
+        } finally {
+            setIsTranslating(false);
+        }
+    };
 
     // Logic Filtering
     const filteredCategories = MOOD_CATEGORIES.map(category => ({
         ...category,
-        options: category.options.filter(option => 
-            option.id.toLowerCase().includes(searchTerm.toLowerCase()) || 
+        options: category.options.filter(option =>
+            option.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
             option.desc.toLowerCase().includes(searchTerm.toLowerCase())
         )
     })).filter(category => category.options.length > 0); // Hapus kategori kosong
@@ -182,8 +234,8 @@ export default function MetadataForm({
                             onClick={() => setLanguage(lang.id)}
                             className={`
                                 flex items-center gap-2 px-4 py-2.5 rounded-xl border transition-all text-sm font-bold
-                                ${language === lang.id 
-                                    ? 'bg-indigo-600 border-indigo-500 text-white shadow-lg shadow-indigo-500/20' 
+                                ${language === lang.id
+                                    ? 'bg-indigo-600 border-indigo-500 text-white shadow-lg shadow-indigo-500/20'
                                     : `${theme.inputBg} border-slate-700 hover:border-slate-500 text-slate-400 hover:text-white`
                                 }
                             `}
@@ -199,7 +251,7 @@ export default function MetadataForm({
             <div className="space-y-4">
                 <div className="flex justify-between items-end">
                     <label className="text-xs font-bold uppercase tracking-wider opacity-70 block">
-                        Select Moods & Vibe 
+                        Select Moods & Vibe
                         <span className="text-[10px] font-normal lowercase opacity-50 ml-1">(Max 3 recommended)</span>
                     </label>
                     {moods.length > 0 && (
@@ -208,13 +260,33 @@ export default function MetadataForm({
                         </span>
                     )}
                 </div>
-                
+
+                {/* AI Analyze Button */}
+                <button
+                    type="button"
+                    onClick={handleAnalyzeMood}
+                    disabled={isAnalyzingMood}
+                    className={`
+                        w-full py-2 rounded-xl text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 transition-all
+                        ${isAnalyzingMood
+                            ? 'bg-slate-700 text-slate-400 cursor-not-allowed'
+                            : 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white hover:shadow-lg hover:shadow-indigo-500/20 active:scale-95'
+                        }
+                    `}
+                >
+                    {isAnalyzingMood ? (
+                        <><Sparkles className="animate-spin" size={14} /> Analyzing Mood...</>
+                    ) : (
+                        <><Sparkles size={14} /> Analyze Mood with AI</>
+                    )}
+                </button>
+
                 <div className={`rounded-2xl border ${theme.border} ${theme.cardBg} overflow-hidden`}>
-                    
+
                     {/* SEARCH BAR */}
                     <div className={`p-3 border-b ${theme.border} flex items-center gap-3 sticky top-0 ${theme.cardBg} z-20`}>
                         <Search size={16} className="text-slate-500" />
-                        <input 
+                        <input
                             type="text"
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
@@ -241,7 +313,7 @@ export default function MetadataForm({
                                         {category.options.map((option) => {
                                             const isSelected = moods.includes(option.id);
                                             const Icon = option.icon;
-                                            
+
                                             return (
                                                 <button
                                                     key={option.id}
@@ -249,8 +321,8 @@ export default function MetadataForm({
                                                     onClick={() => handleMoodToggle(option.id)}
                                                     className={`
                                                         relative group flex items-start gap-3 p-3 rounded-xl border text-left transition-all duration-200 h-full
-                                                        ${isSelected 
-                                                            ? 'bg-indigo-600/10 border-indigo-500 shadow-[0_0_15px_rgba(99,102,241,0.2)]' 
+                                                        ${isSelected
+                                                            ? 'bg-indigo-600/10 border-indigo-500 shadow-[0_0_15px_rgba(99,102,241,0.2)]'
                                                             : `bg-transparent border-slate-700/50 hover:border-slate-500 hover:bg-slate-800/50`
                                                         }
                                                     `}
@@ -258,7 +330,7 @@ export default function MetadataForm({
                                                     <div className={`p-2 rounded-lg shrink-0 ${isSelected ? 'bg-indigo-500 text-white' : 'bg-slate-800 text-slate-400'}`}>
                                                         <Icon size={18} />
                                                     </div>
-                                                    
+
                                                     <div className="flex-1 min-w-0 flex flex-col justify-center">
                                                         <div className={`text-xs font-bold mb-1 ${isSelected ? 'text-indigo-400' : theme.text}`}>
                                                             {option.id}
@@ -280,7 +352,7 @@ export default function MetadataForm({
                             ))
                         ) : (
                             <div className="text-center py-8 opacity-50">
-                                <Search size={32} className="mx-auto mb-2 opacity-50"/>
+                                <Search size={32} className="mx-auto mb-2 opacity-50" />
                                 <p className="text-xs">Tidak ada mood yang cocok dengan "{searchTerm}"</p>
                             </div>
                         )}
@@ -296,6 +368,29 @@ export default function MetadataForm({
                     </span>
                     <span className="text-[10px] opacity-40">Paste LRC format here</span>
                 </div>
+
+                {/* AI Translate Button */}
+                <div className={`px-4 py-2 border-b ${theme.border} ${theme.cardBg} flex justify-end`}>
+                    <button
+                        type="button"
+                        onClick={handleTranslateLyrics}
+                        disabled={isTranslating}
+                        className={`
+                            px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider flex items-center gap-1.5 transition-all
+                            ${isTranslating
+                                ? 'bg-slate-700 text-slate-400 cursor-not-allowed'
+                                : 'bg-emerald-600/10 text-emerald-500 hover:bg-emerald-600/20 border border-emerald-500/20'
+                            }
+                        `}
+                    >
+                        {isTranslating ? (
+                            <><Sparkles className="animate-spin" size={12} /> Translating...</>
+                        ) : (
+                            <><Sparkles size={12} /> Translate Lyrics</>
+                        )}
+                    </button>
+                </div>
+
                 <textarea
                     value={lyricsRaw}
                     onChange={handleLyricsChange}

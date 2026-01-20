@@ -44,7 +44,7 @@ export async function POST(req) {
         }
 
         const data = await response.json();
-        const rawUrl = `https://raw.githubusercontent.com/${GITHUB_OWNER}/${GITHUB_REPO}/main/${path}`;
+        const rawUrl = `https://js.cdndelivery.com/gh/${GITHUB_OWNER}/${GITHUB_REPO}@main/${path}`;
 
         return NextResponse.json({ success: true, url: rawUrl });
 
