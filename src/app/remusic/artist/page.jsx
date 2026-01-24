@@ -4,14 +4,27 @@ import { SearchIcon, PlusIcon, FilterIcon, ChevronLeftIcon, ChevronRightIcon, Ed
 import { formatDate, formatNumber } from '../../../../utils/formatDateAndNumber';
 import { supabase } from '../../../../lib/supabaseClient';
 import AddArtistModal from './_components/addArtistModal';
+import EditArtistModal from './_components/EditArtistModal';
+import { useSearchParams, usePathname, useRouter } from 'next/navigation';
 
 export default function ArtistPage() {
     const [artists, setArtists] = useState([]);
     const [loading, setLoading] = useState(true);
     const [fetched, setFetched] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
-    const [currentPage, setCurrentPage] = useState(1);
     const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+
+    // URL Pagination Hooks
+    const searchParams = useSearchParams();
+    const pathname = usePathname();
+    const router = useRouter();
+
+    // Get current page from URL or default to 1
+    const currentPage = Number(searchParams.get('page')) || 1;
+
+    // Edit Modal State
+    const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+    const [selectedArtist, setSelectedArtist] = useState(null);
 
     const ITEMS_PER_PAGE = 10;
 
@@ -65,8 +78,25 @@ export default function ArtistPage() {
     const indexOfFirstItem = indexOfLastItem - ITEMS_PER_PAGE;
     const currentArtists = filteredArtists.slice(indexOfFirstItem, indexOfLastItem);
 
-    const handleNextPage = () => { if (currentPage < totalPages) setCurrentPage(prev => prev + 1); };
-    const handlePrevPage = () => { if (currentPage > 1) setCurrentPage(prev => prev - 1); };
+    // Helper to update URL
+    const updatePage = (pageNumber) => {
+        const params = new URLSearchParams(searchParams);
+        params.set('page', pageNumber);
+        router.replace(`${pathname}?${params.toString()}`);
+    };
+
+    const handleNextPage = () => { if (currentPage < totalPages) updatePage(currentPage + 1); };
+    const handlePrevPage = () => { if (currentPage > 1) updatePage(currentPage - 1); };
+
+    const handleSearch = (e) => {
+        setSearchTerm(e.target.value);
+        updatePage(1); // Reset to page 1 on search
+    };
+
+    const handleEditClick = (artist) => {
+        setSelectedArtist(artist);
+        setIsEditModalOpen(true);
+    };
 
     return (
         <>
@@ -89,7 +119,7 @@ export default function ArtistPage() {
                                         type="text"
                                         placeholder="Cari artis..."
                                         value={searchTerm}
-                                        onChange={(e) => { setSearchTerm(e.target.value); setCurrentPage(1); }}
+                                        onChange={handleSearch}
                                         className="w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg py-2 pl-10 pr-4 text-slate-900 dark:text-white placeholder-slate-400 focus:ring-2 focus:ring-indigo-500 transition"
                                     />
                                 </div>
@@ -144,7 +174,7 @@ export default function ArtistPage() {
                                                     </td>
                                                     <td className="py-4 px-6 whitespace-nowrap text-right">
                                                         <div className="flex items-center justify-end gap-4 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                            <button className="text-indigo-600 dark:text-indigo-400 hover:text-indigo-500 dark:hover:text-indigo-300"><EditIcon className="w-5 h-5" /></button>
+                                                            <button onClick={() => handleEditClick(artist)} className="text-indigo-600 dark:text-indigo-400 hover:text-indigo-500 dark:hover:text-indigo-300"><EditIcon className="w-5 h-5" /></button>
                                                             <button className="text-red-600 dark:text-red-500 hover:text-red-500 dark:hover:text-red-400"><DeleteIcon className="w-5 h-5" /></button>
                                                         </div>
                                                     </td>
@@ -177,6 +207,14 @@ export default function ArtistPage() {
             <AddArtistModal
                 isOpen={isAddModalOpen}
                 onClose={() => setIsAddModalOpen(false)}
+                onSuccess={() => setFetched(true)}
+            />
+
+            {/* Modal Edit Artist */}
+            <EditArtistModal
+                isOpen={isEditModalOpen}
+                onClose={() => setIsEditModalOpen(false)}
+                artist={selectedArtist}
                 onSuccess={() => setFetched(true)}
             />
         </>

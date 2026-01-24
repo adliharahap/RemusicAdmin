@@ -9,7 +9,7 @@ export async function POST(req) {
         // 1. TERIMA DATA SEBAGAI FORM DATA (Bukan JSON)
         // Ini lebih kuat menangani file besar
         const formData = await req.formData();
-        const file = formData.get('file'); // File object
+        const file = formData.get('file');
         const path = formData.get('path');
         const message = formData.get('message');
 
@@ -44,7 +44,7 @@ export async function POST(req) {
         }
 
         const data = await response.json();
-        const rawUrl = `https://js.cdndelivery.com/gh/${GITHUB_OWNER}/${GITHUB_REPO}@main/${path}`;
+        const rawUrl = `https://cdn.jsdelivr.net/gh/${GITHUB_OWNER}/${GITHUB_REPO}@main/${path}`;
 
         return NextResponse.json({ success: true, url: rawUrl });
 

@@ -28,6 +28,8 @@ const formatDate = (dateString) => {
   });
 };
 
+import { useSearchParams, usePathname, useRouter } from 'next/navigation';
+
 export default function MusikPage() {
   // State Data
   const [songs, setSongs] = useState([]);
@@ -38,8 +40,13 @@ export default function MusikPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedSong, setSelectedSong] = useState(null);
 
-  // State Pagination & Filter
-  const [currentPage, setCurrentPage] = useState(1);
+  // URL Pagination Hooks
+  const searchParams = useSearchParams();
+  const pathname = usePathname();
+  const router = useRouter();
+
+  // Get current page from URL or default to 1
+  const currentPage = Number(searchParams.get('page')) || 1;
   const [searchTerm, setSearchTerm] = useState('');
 
   const SONGS_PER_PAGE = 50;
@@ -98,17 +105,24 @@ export default function MusikPage() {
 
   const totalPages = Math.ceil(totalSongs / SONGS_PER_PAGE);
 
+  // Helper to update URL
+  const updatePage = (pageNumber) => {
+    const params = new URLSearchParams(searchParams);
+    params.set('page', pageNumber);
+    router.replace(`${pathname}?${params.toString()}`);
+  };
+
   const handleNextPage = () => {
-    if (currentPage < totalPages) setCurrentPage(prev => prev + 1);
+    if (currentPage < totalPages) updatePage(currentPage + 1);
   };
 
   const handlePrevPage = () => {
-    if (currentPage > 1) setCurrentPage(prev => prev - 1);
+    if (currentPage > 1) updatePage(currentPage - 1);
   };
 
   const handleSearch = (e) => {
     setSearchTerm(e.target.value);
-    setCurrentPage(1); // Reset ke halaman 1 jika mencari
+    updatePage(1); // Reset ke halaman 1 jika mencari
   };
 
   const handleEditClick = (song, e) => {
