@@ -228,14 +228,20 @@ export default function UploadSongPage() {
         }
     };
 
-    const handleNewArtistPhotoChange = async (e) => {
-        const file = e.target.files[0];
+    const handleNewArtistPhotoChange = async (eOrFile) => {
+        let file;
+        if (eOrFile.target) {
+            file = eOrFile.target.files[0];
+            eOrFile.target.value = null; // Reset input
+        } else {
+            file = eOrFile;
+        }
+
         if (file) {
             const imageDataUrl = await readFile(file);
             setCroppingImage(imageDataUrl);
             setCroppingType('artist');
             setIsCropperOpen(true);
-            e.target.value = null; // Reset input
         }
     };
 
@@ -256,14 +262,20 @@ export default function UploadSongPage() {
         }
     };
 
-    const handleCoverChange = async (e) => {
-        const file = e.target.files[0];
+    const handleCoverChange = async (eOrFile) => {
+        let file;
+        if (eOrFile.target) {
+            file = eOrFile.target.files[0];
+            eOrFile.target.value = null; // Reset input
+        } else {
+            file = eOrFile;
+        }
+
         if (file) {
             const imageDataUrl = await readFile(file);
             setCroppingImage(imageDataUrl);
             setCroppingType('cover');
             setIsCropperOpen(true);
-            e.target.value = null; // Reset input
         }
     };
 

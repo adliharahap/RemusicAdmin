@@ -1,5 +1,5 @@
 import React from 'react';
-import { Github, FileAudio, MessageCircle, Image as ImageIcon, Video } from 'lucide-react';
+import { Github, FileAudio, MessageCircle, Image as ImageIcon, Video, Clipboard } from 'lucide-react';
 
 export default function FileUploadSection({
     theme,
@@ -69,7 +69,33 @@ export default function FileUploadSection({
                 </label>
                 <div className="flex gap-4 items-center">
                     {coverPreviewUrl && <img src={coverPreviewUrl} className="w-12 h-12 rounded-lg object-cover border border-slate-700" alt="Cover Preview" />}
-                    <input type="file" accept="image/*" onChange={handleCoverChange} className={`block w-full text-xs text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-pink-600 file:text-white hover:file:bg-pink-700 cursor-pointer ${theme.inputBg} rounded-lg border ${theme.border}`} />
+                    <div className="relative w-full flex gap-2">
+                        <input type="file" accept="image/*" onChange={handleCoverChange} className={`block w-full text-xs text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-pink-600 file:text-white hover:file:bg-pink-700 cursor-pointer ${theme.inputBg} rounded-lg border ${theme.border}`} />
+                        <button
+                            type="button"
+                            onClick={async () => {
+                                try {
+                                    const clipboardItems = await navigator.clipboard.read();
+                                    for (const item of clipboardItems) {
+                                        if (item.types.some(type => type.startsWith('image/'))) {
+                                            const blob = await item.getType(item.types.find(type => type.startsWith('image/')));
+                                            const file = new File([blob], "pasted_cover.png", { type: blob.type });
+                                            handleCoverChange(file);
+                                            return;
+                                        }
+                                    }
+                                    alert("No image found in clipboard");
+                                } catch (err) {
+                                    console.error(err);
+                                    alert("Failed to read clipboard. Please allow permissions.");
+                                }
+                            }}
+                            className={`px-3 py-2 rounded-lg border ${theme.border} ${theme.inputBg} hover:bg-slate-800 transition-colors text-pink-400`}
+                            title="Paste from Clipboard"
+                        >
+                            <Clipboard size={16} />
+                        </button>
+                    </div>
                 </div>
             </div>
 

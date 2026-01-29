@@ -10,7 +10,7 @@ export const dynamic = 'force-dynamic';
 const rateLimitMap = new Map();
 
 function checkRateLimit(ip) {
-    const limit = 30; // Maksimal 30 request
+    const limit = 10; // Maksimal 10 request
     const windowMs = 1000; // Per 1 detik (1000 ms)
 
     if (!rateLimitMap.has(ip)) {
@@ -39,10 +39,41 @@ function checkRateLimit(ip) {
 
 export async function GET(req) {
     
-    const secret = req.headers.get('x-remusic-secret');
+    // 1. 👮‍♂️ DUAL AUTHENTICATION STRATEGY
+    // Cek Header Secret (untuk Android/External) atau Session Cookie (untuk Admin Dashboard)
     
-    // Pastikan APP_SECRET sudah ada di .env.local
-    if (secret !== process.env.APP_SECRET) {
+    const headerSecret = req.headers.get('x-remusic-secret');
+    const serverSecret = process.env.APP_SECRET;
+    let isAuthorized = false;
+
+    // A. Cek Secret Key
+    if (headerSecret === serverSecret) {
+        isAuthorized = true;
+    } else {
+        // B. Cek Session Cookie (Admin Dashboard)
+        const cookieStore = await cookies();
+        
+        // Kita butuh client Supabase untuk cek session
+        // Note: Kita inisialisasi client khusus auth check di sini
+        const supabaseAuth = createServerClient(
+            process.env.NEXT_PUBLIC_SUPABASE_URL,
+            process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY, // Pakai Anon Key buat cek session user
+            {
+                cookies: {
+                    get(name) { return cookieStore.get(name)?.value; },
+                    set(name, value, options) {},
+                    remove(name, options) {},
+                },
+            }
+        );
+
+        const { data: { user } } = await supabaseAuth.auth.getUser();
+        if (user) {
+            isAuthorized = true;
+        }
+    }
+
+    if (!isAuthorized) {
         return NextResponse.json(
             { error: 'Eits, mau ngapain bang? (Unauthorized Access)' }, 
             { status: 401 }

@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import { supabase } from '../../../../../lib/supabaseClient';
+import axios from 'axios';
 
 // --- HELPER: Parse Lirik LRC ---
 const parseLrc = (lrcString) => {
@@ -107,8 +108,13 @@ export default function EditSongModal({ isOpen, onClose, song, onSuccess }) {
             const fetchStream = async () => {
                 setIsFetchingStream(true);
                 try {
-                    const res = await fetch(`/api/get-stream-url?file_id=${tgId}`);
-                    const data = await res.json();
+                    const res = await axios.get(`/api/get-stream-url`, {
+                        params: {
+                            file_id: tgId,
+                            song_id: formData.id
+                        }
+                    });
+                    const data = res.data;
 
                     if (data.success && data.url) {
                         setPlayableUrl(data.url);
