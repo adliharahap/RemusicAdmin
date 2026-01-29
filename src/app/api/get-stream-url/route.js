@@ -1,47 +1,150 @@
 import { NextResponse } from 'next/server';
+import { createServerClient } from '@supabase/ssr';
+import { cookies } from 'next/headers';
 
 export const dynamic = 'force-dynamic';
 
+// --- 🔥 LOGIKA RATE LIMITER (In-Memory) ---
+// Kita simpan data request di RAM sementara server hidup.
+// Format: Map<IP_Address, { count: number, lastReset: timestamp }>
+const rateLimitMap = new Map();
+
+function checkRateLimit(ip) {
+    const limit = 30; // Maksimal 30 request
+    const windowMs = 1000; // Per 1 detik (1000 ms)
+
+    if (!rateLimitMap.has(ip)) {
+        rateLimitMap.set(ip, { count: 1, lastReset: Date.now() });
+        return true; // Lolos
+    }
+
+    const record = rateLimitMap.get(ip);
+    const now = Date.now();
+
+    if (now - record.lastReset > windowMs) {
+        // Kalau sudah lewat 1 detik, reset hitungan
+        record.count = 1;
+        record.lastReset = now;
+        return true; // Lolos
+    }
+
+    if (record.count >= limit) {
+        return false; // 🚫 DITOLAK (Kebanyakan spam)
+    }
+
+    record.count++;
+    return true; // Lolos
+}
+// ------------------------------------------
+
 export async function GET(req) {
-    // 1. Ambil file_id dari URL (?file_id=...)
+    
+    const secret = req.headers.get('x-remusic-secret');
+    
+    // Pastikan APP_SECRET sudah ada di .env.local
+    if (secret !== process.env.APP_SECRET) {
+        return NextResponse.json(
+            { error: 'Eits, mau ngapain bang? (Unauthorized Access)' }, 
+            { status: 401 }
+        );
+    }
+    // 1. 👮‍♂️ CEK POLISI: Rate Limit Check
+    // Ambil IP Asli User (Penting buat deteksi siapa yang nyerang)
+    const forwardedFor = req.headers.get('x-forwarded-for');
+    const ip = forwardedFor ? forwardedFor.split(',')[0] : '127.0.0.1';
+
+    if (!checkRateLimit(ip)) {
+        console.warn(`⛔ SPAM DETECTED from IP: ${ip}`);
+        return NextResponse.json(
+            { error: 'Woi santai dong! Terlalu banyak request (Rate Limit Exceeded).' }, 
+            { status: 429 } // Kode HTTP Resmi buat "Lu Kena Spam"
+        );
+    }
+
+    // --- LOGIKA UTAMA (Sama kayak sebelumnya) ---
     const { searchParams } = new URL(req.url);
+    const songId = searchParams.get('song_id');
     const fileId = searchParams.get('file_id');
 
-    // Validasi input
-    if (!fileId) {
-        return NextResponse.json({ error: 'File ID missing' }, { status: 400 });
+    if (!songId || !fileId) {
+        return NextResponse.json({ error: 'Missing song_id or file_id' }, { status: 400 });
     }
 
     const botToken = process.env.BOT_TOKEN;
     if (!botToken) {
-        return NextResponse.json({ error: 'Server configuration error: BOT_TOKEN missing' }, { status: 500 });
+        return NextResponse.json({ error: 'Server config error: BOT_TOKEN missing' }, { status: 500 });
     }
 
+    // Init Supabase Admin (Service Role)
+    const cookieStore = await cookies();
+    const supabase = createServerClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL,
+        process.env.SUPABASE_SERVICE_ROLE_KEY, 
+        {
+            cookies: {
+                get(name) { return cookieStore.get(name)?.value; },
+                set(name, value, options) {},
+                remove(name, options) {},
+            },
+        }
+    );
+
     try {
-        // 2. Tanya ke Telegram API: "File ID ini path-nya di mana?"
-        const response = await fetch(`https://api.telegram.org/bot${botToken}/getFile?file_id=${fileId}`, {
-            next: { revalidate: 3000 } 
-        });
+        // --- LOGIKA CERDAS: CEK SUPABASE DULU ---
+        const { data: currentData } = await supabase
+            .from('songs')
+            .select('telegram_direct_url, telegram_url_expires_at')
+            .eq('id', songId)
+            .single();
 
-        const data = await response.json();
-
-        // Cek jika Telegram menolak (misal ID salah atau kadaluarsa)
-        if (!data.ok) {
-            console.error("Telegram API Error:", data);
-            return NextResponse.json({ error: 'Failed to get file from Telegram', details: data }, { status: 502 });
+        // Cek Expired
+        if (currentData && currentData.telegram_direct_url) {
+            const expiredAt = new Date(currentData.telegram_url_expires_at).getTime();
+            const now = Date.now();
+            
+            // Jika masih ada sisa waktu > 5 menit, PAKAI CACHE!
+            if (expiredAt > now + (5 * 60 * 1000)) { 
+                return NextResponse.json({
+                    success: true,
+                    source: '⚡ DATABASE (Supabase Cache)',
+                    url: currentData.telegram_direct_url,
+                    expires_at: currentData.telegram_url_expires_at
+                });
+            }
         }
 
-        // 3. Ambil file_path dari respon Telegram
-        const filePath = data.result.file_path;
+        // --- JIKA DATA BASI: HIT TELEGRAM ---
+        const tgRes = await fetch(`https://api.telegram.org/bot${botToken}/getFile?file_id=${fileId}`, {
+            next: { revalidate: 0 }
+        });
+        const tgData = await tgRes.json();
 
-        // 4. Susun Link Download Langsung
-        // Link ini yang akan dikasih ke ExoPlayer di Android
-        const streamUrl = `https://api.telegram.org/file/bot${botToken}/${filePath}`;
+        if (!tgData.ok) {
+            // console.error("Telegram API Error:", tgData); <-- Opsional, biar log gak penuh
+            return NextResponse.json({ error: 'Failed to get file from Telegram', details: tgData }, { status: 502 });
+        }
 
-        // 5. Kirim balik ke Android/Browser
+        const filePath = tgData.result.file_path;
+        const newDirectUrl = `https://api.telegram.org/file/bot${botToken}/${filePath}`;
+
+        // Set Expired 55 Menit
+        const expiresAt = new Date();
+        expiresAt.setMinutes(expiresAt.getMinutes() + 55);
+
+        // Update Database
+        await supabase
+            .from('songs')
+            .update({
+                telegram_direct_url: newDirectUrl,
+                telegram_url_expires_at: expiresAt.toISOString()
+            })
+            .eq('id', songId);
+
         return NextResponse.json({ 
             success: true, 
-            url: streamUrl 
+            source: '🌍 API (Telegram Fetch)',
+            url: newDirectUrl,
+            expires_at: expiresAt.toISOString()
         });
 
     } catch (error) {

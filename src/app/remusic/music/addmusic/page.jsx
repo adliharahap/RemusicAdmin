@@ -40,6 +40,7 @@ export default function UploadSongPage() {
     const [title, setTitle] = useState("");
     const [language, setLanguage] = useState("id");
     const [moods, setMoods] = useState([]);
+    const [featuredArtists, setFeaturedArtists] = useState([]);
     const [lyricsRaw, setLyricsRaw] = useState("");
     const [telegramFileId, setTelegramFileId] = useState("");
     const [telegramDuration, setTelegramDuration] = useState(0);
@@ -387,8 +388,9 @@ export default function UploadSongPage() {
                 id: songId,
                 title: title,
                 artist_id: finalArtistId,
+                featured_artists: featuredArtists,
                 uploader_user_id: user.id,
-                audio_url: null, // Update nanti
+                audio_url: null,
                 telegram_audio_file_id: telegramFileId || null,
                 cover_url: null, // Update nanti
                 canvas_url: null, // Update nanti
@@ -546,6 +548,7 @@ export default function UploadSongPage() {
                             title={title} setTitle={setTitle} language={language} setLanguage={setLanguage}
                             moods={moods} handleMoodToggle={handleMoodToggle} setMoods={setMoods}
                             lyricsRaw={lyricsRaw} handleLyricsChange={handleLyricsChange}
+                            featuredArtists={featuredArtists} setFeaturedArtists={setFeaturedArtists}
                         />
                     </div>
                 </div>

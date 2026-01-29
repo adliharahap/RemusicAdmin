@@ -140,12 +140,33 @@ export default function MetadataForm({
     title, setTitle,
     language, setLanguage,
     moods, handleMoodToggle, setMoods,
-    lyricsRaw, handleLyricsChange
+    lyricsRaw, handleLyricsChange,
+    featuredArtists, setFeaturedArtists
 }) {
     // State lokal untuk pencarian mood (tidak perlu dikirim ke parent)
     const [searchTerm, setSearchTerm] = useState("");
     const [isAnalyzingMood, setIsAnalyzingMood] = useState(false);
     const [isTranslating, setIsTranslating] = useState(false);
+    const [tagInput, setTagInput] = useState("");
+
+    const handleKeyDown = (e) => {
+        if (e.key === 'Enter' || e.key === ',') {
+            e.preventDefault();
+            addArtistTag();
+        }
+    };
+
+    const addArtistTag = () => {
+        const trimmedInput = tagInput.trim();
+        if (trimmedInput && !featuredArtists.includes(trimmedInput)) {
+            setFeaturedArtists([...featuredArtists, trimmedInput]);
+            setTagInput('');
+        }
+    };
+
+    const removeTag = (indexToRemove) => {
+        setFeaturedArtists(featuredArtists.filter((_, index) => index !== indexToRemove));
+    };
 
     const handleAnalyzeMood = async () => {
         if (!lyricsRaw.trim()) return alert("Lyrics cannot be empty for mood analysis.");
@@ -243,6 +264,47 @@ export default function MetadataForm({
                             <span className="text-lg">{lang.flag}</span>
                             <span>{lang.label}</span>
                         </button>
+                    ))}
+                </div>
+            </div>
+
+            {/* Featured Artists Input */}
+            <div className="space-y-2">
+                <label className="text-xs font-bold uppercase tracking-wider opacity-70 flex items-center gap-1">
+                    Featured Artists <span className="text-[10px] font-normal lowercase opacity-50 ml-1">(Optional - Type & Enter)</span>
+                </label>
+
+                <div className="flex gap-2">
+                    <input
+                        type="text"
+                        value={tagInput}
+                        onChange={(e) => setTagInput(e.target.value)}
+                        onKeyDown={handleKeyDown}
+                        placeholder="E.g. Cardi B, DJ Khaled (Press Enter)"
+                        className={`flex-1 ${theme.inputBg} border ${theme.border} rounded-xl px-4 py-2.5 outline-none transition-all text-sm`}
+                    />
+                    <button
+                        type="button"
+                        onClick={addArtistTag}
+                        className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-xl text-sm font-bold transition-colors"
+                    >
+                        Add
+                    </button>
+                </div>
+
+                {/* Chips */}
+                <div className="flex flex-wrap gap-2 mt-2">
+                    {featuredArtists && featuredArtists.map((artist, index) => (
+                        <div key={index} className="bg-indigo-500/10 text-indigo-400 px-3 py-1 rounded-full text-xs font-bold flex items-center gap-2 border border-indigo-500/20">
+                            <span>{artist}</span>
+                            <button
+                                type="button"
+                                onClick={() => removeTag(index)}
+                                className="hover:text-white focus:outline-none transition-colors"
+                            >
+                                <X size={12} />
+                            </button>
+                        </div>
                     ))}
                 </div>
             </div>
