@@ -24,12 +24,25 @@ export async function POST(req) {
             metadata = await mm.parseBuffer(buffer, file.type);
 
         } else if (contentType.includes('application/json')) {
-            // Handle URL
+            // Handle URL or Telegram File ID
             const body = await req.json();
-            const { url } = body;
+            let { url, file_id } = body;
+
+            if (file_id) {
+                const botToken = process.env.BOT_TOKEN;
+                if (!botToken) throw new Error("BOT_TOKEN missing");
+                
+                const tgRes = await fetch(`https://api.telegram.org/bot${botToken}/getFile?file_id=${file_id}`);
+                const tgData = await tgRes.json();
+                
+                if (!tgData.ok) throw new Error("Failed to get file path from Telegram");
+                
+                const filePath = tgData.result.file_path;
+                url = `https://api.telegram.org/file/bot${botToken}/${filePath}`;
+            }
 
             if (!url) {
-                return NextResponse.json({ error: 'No URL provided' }, { status: 400 });
+                return NextResponse.json({ error: 'No URL or file_id provided' }, { status: 400 });
             }
 
             // Fetch the stream
@@ -54,9 +67,10 @@ export async function POST(req) {
         }
 
         // Extract relevant data
-        const { common } = metadata;
+        const { common, format } = metadata;
         const title = common.title || '';
         const artist = common.artist || '';
+        const duration = format.duration ? Math.round(format.duration * 1000) : 0;
         
         let cover = null;
         if (common.picture && common.picture.length > 0) {
@@ -71,6 +85,7 @@ export async function POST(req) {
             success: true,
             title,
             artist,
+            duration,
             cover
         });
 

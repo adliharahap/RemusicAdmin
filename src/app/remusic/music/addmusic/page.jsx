@@ -95,54 +95,68 @@ export default function UploadSongPage() {
     // -------------------------------------------------------------------------
     // 🔥 FITUR BARU: AUTO PREVIEW TELEGRAM ID
     // -------------------------------------------------------------------------
+    // -------------------------------------------------------------------------
+    // 🔥 FITUR BARU: AUTO EXTRACT METADATA FROM TELEGRAM ID
+    // -------------------------------------------------------------------------
     useEffect(() => {
-        if (!telegramFileId || telegramFileId.length < 20) return; // Minimal length disesuaikan
+        if (!telegramFileId || telegramFileId.length < 20) return;
 
         const delayDebounceFn = setTimeout(async () => {
-            console.log("🔍 Mendeteksi Telegram ID...");
+            console.log("🔍 Extracting Metadata from Telegram ID...");
+            setIsMetadataLoading(true);
 
             try {
-                // Request ke API
-                const response = await fetch(`/api/get-stream-url?file_id=${telegramFileId}`);
-                const data = await response.json();
+                // Call extract-metadata directly with file_id
+                const res = await fetch('/api/extract-metadata', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ file_id: telegramFileId })
+                });
 
-                if (data.success && data.url) {
-                    console.log("✅ Stream URL Didapat:", data.url);
+                const data = await res.json();
 
-                    // 1. Set URL ke Player
-                    setAudioPreviewUrl(data.url);
-                    setAudioFile(null); // Reset file manual
+                if (data.success) {
+                    console.log("✅ Metadata Extracted:", data);
+                    if (data.title) setTitle(data.title);
+                    if (data.artist) {
+                        setArtistSearchTerm(data.artist);
+                        setNewArtistName(data.artist);
+                    }
+                    if (data.duration) {
+                        setTelegramDuration(data.duration);
+                        console.log("✅ Duration Extracted:", data.duration, "ms");
+                    }
+                    if (data.cover) {
+                        try {
+                            const byteString = atob(data.cover.data);
+                            const ab = new ArrayBuffer(byteString.length);
+                            const ia = new Uint8Array(ab);
+                            for (let i = 0; i < byteString.length; i++) {
+                                ia[i] = byteString.charCodeAt(i);
+                            }
+                            const blob = new Blob([ab], { type: data.cover.mime });
+                            const ext = data.cover.mime.split('/')[1] || 'jpg';
+                            const file = new File([blob], `extracted_cover.${ext}`, { type: data.cover.mime });
 
-                    // 2. 🔥 AMBIL DURASI DARI STREAM URL (INVISIBLE AUDIO)
-                    // Kita buat objek audio sementara di background cuma buat intip durasi
-                    const tempAudio = new Audio(data.url);
-
-                    tempAudio.onloadedmetadata = () => {
-                        if (isFinite(tempAudio.duration)) {
-                            const durMs = Math.round(tempAudio.duration * 1000);
-                            setTelegramDuration(durMs);
-                            console.log("✅ Durasi Telegram Terdeteksi:", durMs, "ms");
+                            setCoverFile(file);
+                            setCoverPreviewUrl(URL.createObjectURL(file));
+                        } catch (e) {
+                            console.error("Error processing cover image:", e);
                         }
-                    };
-
-                    // Hapus object audio kalau error/selesai biar hemat memori
-                    tempAudio.onerror = () => console.warn("Gagal baca metadata durasi stream");
-
-                    // 3. Extract Metadata from URL
-                    await fetchMetadata(data.url, 'url');
-
+                    }
                 } else {
-                    console.warn("❌ Gagal mendapatkan link:", data.error);
-                    setAudioPreviewUrl(null);
-                    setTelegramDuration(0);
+                    console.warn("❌ Failed to extract metadata:", data.error);
                 }
             } catch (error) {
-                console.error("Error fetching stream:", error);
+                console.error("Error extracting metadata:", error);
+            } finally {
+                setIsMetadataLoading(false);
             }
         }, 1000);
 
         return () => clearTimeout(delayDebounceFn);
     }, [telegramFileId]);
+    // -------------------------------------------------------------------------
     // -------------------------------------------------------------------------
 
 
