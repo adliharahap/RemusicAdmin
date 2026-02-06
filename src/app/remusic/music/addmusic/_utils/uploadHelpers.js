@@ -1,4 +1,4 @@
-// --- UPLOAD HELPER (UPDATED TO USE FORMDATA) ---
+// --- UPLOAD HELPER (UPDATED TO USE FORMDATA & RETRY LOGIC) ---
 export const uploadToGithub = async (file, id, type) => {
     if (!file) return null;
 
@@ -8,40 +8,62 @@ export const uploadToGithub = async (file, id, type) => {
         ? `artists/${id}/${id}.${ext}` 
         : `uploads/${id}/${type}_${id}.${ext}`;
     
-    // PERUBAHAN UTAMA DI SINI:
-    // Kita pakai FormData untuk mengirim file binary langsung (lebih hemat memori & lolos limit JSON)
     const formData = new FormData();
     formData.append('file', file);
     formData.append('path', path);
     formData.append('message', `Upload ${type} for ID ${id}`);
 
-    const response = await fetch('/api/github-upload', {
-        method: 'POST',
-        // PENTING: JANGAN set 'Content-Type': 'application/json'
-        // Browser akan otomatis set boundary multipart/form-data
-        body: formData
-    });
+    const MAX_RETRIES = 4;
+    const RETRY_DELAY = 1000; // 1 second
 
-    // Handle Error yang lebih rapi
-    if (!response.ok) {
-        // Cek khusus jika error 413 (File terlalu besar)
-        if (response.status === 413) {
-            throw new Error("File terlalu besar (Server Limit). Coba kurangi ukuran/resolusi.");
-        }
+    let lastError;
 
-        // Coba baca error sebagai JSON, kalau gagal baca sebagai Text
-        const errorText = await response.text();
+    for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
         try {
-            const errorJson = JSON.parse(errorText);
-            throw new Error(errorJson.error || 'Upload failed');
-        } catch (e) {
-            // Jika response bukan JSON (misal HTML error dari Vercel/Next.js)
-            throw new Error(`Upload Failed (${response.status}): ${errorText.substring(0, 100)}...`);
+            const response = await fetch('/api/github-upload', {
+                method: 'POST',
+                // PENTING: JANGAN set 'Content-Type': 'application/json'
+                body: formData
+            });
+
+            // Handle Error yang lebih rapi
+            if (!response.ok) {
+                // Cek khusus jika error 413 (File terlalu besar) - TIDAK PERLU RETRY
+                if (response.status === 413) {
+                    throw new Error("File terlalu besar (Server Limit). Coba kurangi ukuran/resolusi.");
+                }
+
+                // Coba baca error sebagai JSON, kalau gagal baca sebagai Text
+                const errorText = await response.text();
+                try {
+                    const errorJson = JSON.parse(errorText);
+                    throw new Error(errorJson.error || `Upload failed with status ${response.status}`);
+                } catch (e) {
+                    // Jika response bukan JSON (misal HTML error dari Vercel/Next.js)
+                    throw new Error(`Upload Failed (${response.status}): ${errorText.substring(0, 100)}...`);
+                }
+            }
+
+            const data = await response.json();
+            return data.url;
+
+        } catch (error) {
+            console.warn(`Attempt ${attempt} failed for ${type}: ${error.message}`);
+            lastError = error;
+
+            // Jangan retry jika error fatal (seperti file terlalu besar)
+            if (error.message.includes("File terlalu besar")) {
+                throw error;
+            }
+
+            // Jika belum mencapai batas retry, tunggu sebentar sebelum coba lagi
+            if (attempt < MAX_RETRIES) {
+                await new Promise(resolve => setTimeout(resolve, RETRY_DELAY));
+            }
         }
     }
 
-    const data = await response.json();
-    return data.url;
+    throw lastError || new Error("Upload failed after multiple attempts");
 };
 
 // --- UTILS LAINNYA (TETAP SAMA) ---

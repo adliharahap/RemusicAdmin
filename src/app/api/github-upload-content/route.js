@@ -46,10 +46,22 @@ export async function POST(req) {
             }, { status: 400 });
         }
 
-        // Generate path otomatis menggunakan UUID jika tidak disediakan client
-        if (!filePath) {
+        // Generate path logic
+        if (filePath) {
+             // Custom Path Logic (Append UUID to existing folder)
+             // Clean clean leading/trailing slashes just in case
+             filePath = filePath.replace(/^\/+|\/+$/g, '');
+             
+             // Check if it looks like a directory (doesn't end in extension) or file? 
+             // Requirement: "upload ke folder ini" -> imply we are implementing "upload TO this folder"
+             // So we append a new file.
              const uuid = randomUUID();
-             const ext = file.type === 'video/mp4' ? 'mp4' : 'jpg'; // Force jpg for images usually, or derived from type
+             const ext = file.type === 'video/mp4' ? 'mp4' : 'jpg'; 
+             filePath = `${filePath}/${uuid}.${ext}`;
+        } else {
+             // Auto Path Logic (New Folder)
+             const uuid = randomUUID();
+             const ext = file.type === 'video/mp4' ? 'mp4' : 'jpg'; 
              // Format: uploads/{uuid}/{uuid}.{ext}
              filePath = `uploads/${uuid}/${uuid}.${ext}`;
         }

@@ -20,6 +20,10 @@ const GithubUploadPage = () => {
     const [contentFile, setContentFile] = useState(null);
     const [contentPreviewUrl, setContentPreviewUrl] = useState(null);
 
+    // CUSTOM PATH STATE
+    const [pathMode, setPathMode] = useState('auto'); // 'auto' | 'custom'
+    const [customPathUrl, setCustomPathUrl] = useState('');
+
     // SHARED
     const [isCropperOpen, setIsCropperOpen] = useState(false);
     const [croppingImage, setCroppingImage] = useState(null);
@@ -163,12 +167,30 @@ const GithubUploadPage = () => {
             formData.append('file', fileToUpload);
             formData.append('message', `Upload ${target} via Admin UI`);
 
+            // Handle Custom Path (Only for Content)
+            if (target === 'content' && pathMode === 'custom') {
+                const match = customPathUrl.match(/(uploads\/.*)/);
+                if (match) {
+                    formData.append('path', match[1]);
+                } else {
+                    throw new Error("Invalid Custom URL. Must contain 'uploads/...'");
+                }
+            }
+
             const res = await fetch(apiEndpoint, {
                 method: 'POST',
                 body: formData,
             });
 
-            const data = await res.json();
+            let data;
+            const contentTypeHeader = res.headers.get("content-type");
+            if (contentTypeHeader && contentTypeHeader.indexOf("application/json") !== -1) {
+                data = await res.json();
+            } else {
+                // If not JSON (e.g. 413 or 500 HTML error)
+                const text = await res.text();
+                data = { error: text.includes('<body>') ? `Upload Failed (${res.status}: ${res.statusText})` : text };
+            }
 
             if (!res.ok) {
                 throw new Error(data.error || "Upload failed");
@@ -328,8 +350,8 @@ const GithubUploadPage = () => {
                                     <button
                                         onClick={() => { setContentType('cover'); setContentFile(null); setContentPreviewUrl(null); }}
                                         className={`flex flex-col items-center justify-center gap-2 py-4 rounded-xl border-2 transition-all ${contentType === 'cover'
-                                                ? 'bg-indigo-50 dark:bg-indigo-500/10 border-indigo-500 text-indigo-600 dark:text-indigo-400'
-                                                : 'bg-transparent border-slate-200 dark:border-white/10 text-slate-500 hover:border-indigo-200 dark:hover:border-white/20'
+                                            ? 'bg-indigo-50 dark:bg-indigo-500/10 border-indigo-500 text-indigo-600 dark:text-indigo-400'
+                                            : 'bg-transparent border-slate-200 dark:border-white/10 text-slate-500 hover:border-indigo-200 dark:hover:border-white/20'
                                             }`}
                                     >
                                         <div className={`w-8 h-8 rounded-full flex items-center justify-center ${contentType === 'cover' ? 'bg-indigo-100 dark:bg-indigo-500/20' : 'bg-slate-100 dark:bg-white/5'
@@ -342,8 +364,8 @@ const GithubUploadPage = () => {
                                     <button
                                         onClick={() => { setContentType('canvas'); setContentFile(null); setContentPreviewUrl(null); }}
                                         className={`flex flex-col items-center justify-center gap-2 py-4 rounded-xl border-2 transition-all ${contentType === 'canvas'
-                                                ? 'bg-indigo-50 dark:bg-indigo-500/10 border-indigo-500 text-indigo-600 dark:text-indigo-400'
-                                                : 'bg-transparent border-slate-200 dark:border-white/10 text-slate-500 hover:border-indigo-200 dark:hover:border-white/20'
+                                            ? 'bg-indigo-50 dark:bg-indigo-500/10 border-indigo-500 text-indigo-600 dark:text-indigo-400'
+                                            : 'bg-transparent border-slate-200 dark:border-white/10 text-slate-500 hover:border-indigo-200 dark:hover:border-white/20'
                                             }`}
                                     >
                                         <div className={`w-8 h-8 rounded-full flex items-center justify-center ${contentType === 'canvas' ? 'bg-indigo-100 dark:bg-indigo-500/20' : 'bg-slate-100 dark:bg-white/5'
@@ -426,6 +448,44 @@ const GithubUploadPage = () => {
                                                     />
                                                 )}
                                             </div>
+
+                                            {/* PATH TOGGLE (Only Content) */}
+                                            {activeModal === 'content' && (
+                                                <div className="bg-slate-50 dark:bg-white/5 p-4 rounded-xl border border-slate-200 dark:border-white/10 space-y-3">
+                                                    <div className="flex bg-white dark:bg-black/20 p-1 rounded-lg border border-slate-200 dark:border-white/5">
+                                                        <button
+                                                            onClick={() => setPathMode('auto')}
+                                                            className={`flex-1 py-1.5 text-xs font-bold rounded-md transition-all ${pathMode === 'auto' ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-500/20 dark:text-indigo-300' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
+                                                        >
+                                                            Auto (New Folder)
+                                                        </button>
+                                                        <button
+                                                            onClick={() => setPathMode('custom')}
+                                                            className={`flex-1 py-1.5 text-xs font-bold rounded-md transition-all ${pathMode === 'custom' ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-500/20 dark:text-indigo-300' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
+                                                        >
+                                                            Custom Path
+                                                        </button>
+                                                    </div>
+
+                                                    {pathMode === 'custom' && (
+                                                        <div className="space-y-1">
+                                                            <label className="text-xs font-semibold text-slate-500 dark:text-slate-400 ml-1">
+                                                                GitHub Folder URL
+                                                            </label>
+                                                            <input
+                                                                type="text"
+                                                                value={customPathUrl}
+                                                                onChange={(e) => setCustomPathUrl(e.target.value)}
+                                                                placeholder="https://github.com/.../uploads/UUID-FOLDER"
+                                                                className="w-full text-xs p-2.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-black/20 text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500 outline-none"
+                                                            />
+                                                            <p className="text-[10px] text-slate-400 px-1">
+                                                                Paste the URL of the folder you want to upload to. (Must contain "uploads/...")
+                                                            </p>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            )}
 
                                             {/* Action Buttons */}
                                             {!(activeModal === 'content' && contentType === 'canvas') && (
