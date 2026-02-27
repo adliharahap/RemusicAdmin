@@ -110,15 +110,15 @@ export default function SystemHealthPage() {
     };
 
     // --- WEBHOOK MANAGER ---
-    const handleSetWebhook = async (url) => {
-        if (!url) return alert("URL tidak boleh kosong!");
-        if (!url.startsWith("https://")) return alert("URL harus menggunakan https://");
+    const handleSetWebhook = async (url, isProduction = false, dropPendingUpdates = false) => {
+        if (!isProduction && !url) return alert("URL tidak boleh kosong!");
+        if (!isProduction && !url.startsWith("https://")) return alert("URL harus menggunakan https://");
 
         setIsSettingWebhook(true);
         try {
-            const res = await axios.post('/api/system/telegram-webhook', { url });
+            const res = await axios.post('/api/system/telegram-webhook', { url, isProduction, dropPendingUpdates });
             if (res.data.success) {
-                alert(`Berhasil mengubah Webhook URL ke: \n${url}`);
+                alert(res.data.message);
                 setWebhookInput("");
                 fetchData(); // refresh status
             }
@@ -222,8 +222,19 @@ export default function SystemHealthPage() {
                                 </div>
                                 {botStatus.result && (
                                     <div className="flex items-center justify-between p-3 rounded-lg bg-slate-50 dark:bg-white/5">
-                                        <span className="text-sm text-slate-500 dark:text-slate-400">Pending</span>
-                                        <span className="text-sm font-medium text-slate-900 dark:text-white">
+                                        <div className="flex flex-col">
+                                            <span className="text-sm text-slate-500 dark:text-slate-400">Pending</span>
+                                            {botStatus.result.pending_update_count > 0 && (
+                                                <button 
+                                                    onClick={() => handleSetWebhook(botStatus.result.url, false, true)}
+                                                    disabled={isSettingWebhook}
+                                                    className="text-[10px] text-red-500 hover:text-red-700 hover:underline mt-0.5 text-left font-medium transition-colors cursor-pointer text-indigo"
+                                                >
+                                                    Tap to Drop Pending
+                                                </button>
+                                            )}
+                                        </div>
+                                        <span className={`text-sm font-medium ${botStatus.result.pending_update_count > 0 ? 'text-red-500' : 'text-slate-900 dark:text-white'}`}>
                                             {botStatus.result.pending_update_count}
                                         </span>
                                     </div>
@@ -245,11 +256,11 @@ export default function SystemHealthPage() {
                                             type="text" 
                                             value={webhookInput}
                                             onChange={(e) => setWebhookInput(e.target.value)}
-                                            placeholder="https://ngrok-url/api/telegram/webhook" 
+                                            placeholder="https://ngrok-url-anda" 
                                             className="w-full text-sm px-3 py-2 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-slate-700/50 rounded-lg focus:outline-none focus:ring-2 ring-indigo-500/50"
                                          />
                                          <button 
-                                            onClick={() => handleSetWebhook(webhookInput)}
+                                            onClick={() => handleSetWebhook(webhookInput, false)}
                                             disabled={isSettingWebhook || !webhookInput}
                                             className="px-3 py-2 bg-slate-800 dark:bg-slate-700 hover:bg-slate-700 text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-50 shrink-0 flex items-center gap-2"
                                          >
@@ -258,7 +269,7 @@ export default function SystemHealthPage() {
                                      </div>
                                      <button 
                                         type="button"
-                                        onClick={() => handleSetWebhook('https://remusic-admin.vercel.app/api/telegram/webhook')}
+                                        onClick={() => handleSetWebhook('', true)}
                                         disabled={isSettingWebhook}
                                         className="w-full py-2 px-3 border-2 border-indigo-500/20 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-500/10 rounded-lg text-sm font-semibold transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
                                      >

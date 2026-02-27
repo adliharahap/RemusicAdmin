@@ -10,19 +10,33 @@ export async function POST(req) {
 
     try {
         const body = await req.json();
-        const { url } = body;
+        const { url, isProduction, dropPendingUpdates } = body;
+        const secret = process.env.SECRET_PATH;
 
-        if (!url) {
-            return NextResponse.json({ error: 'URL is required' }, { status: 400 });
+        let finalUrl = url;
+
+        if (isProduction) {
+            finalUrl = `https://remusic-admin.vercel.app/api/bot/${secret}`;
+        } else {
+            if (!url) {
+                return NextResponse.json({ error: 'URL is required' }, { status: 400 });
+            }
+            // Auto append path if user only pastes the ngrok base url
+            if (!finalUrl.includes('/api/bot/')) {
+                finalUrl = finalUrl.replace(/\/$/, "");
+                finalUrl = `${finalUrl}/api/bot/${secret}`;
+            }
         }
 
         const bot = new Telegraf(botToken);
         
         // Memanggil Telegram API untuk mengubah Webhook URL
-        const result = await bot.telegram.setWebhook(url);
+        const result = await bot.telegram.setWebhook(finalUrl, {
+            drop_pending_updates: dropPendingUpdates ? true : false
+        });
         
         if (result) {
-            return NextResponse.json({ success: true, message: `Webhook URL successfully set to ${url}`, url: url });
+            return NextResponse.json({ success: true, message: `Webhook URL successfully set to ${finalUrl}. (Dropped Pending: ${dropPendingUpdates ? 'Yes' : 'No'})`, url: finalUrl });
         } else {
              return NextResponse.json({ error: 'Failed to set Webhook URL' }, { status: 500 });
         }
