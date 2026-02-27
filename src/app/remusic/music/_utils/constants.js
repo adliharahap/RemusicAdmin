@@ -1,5 +1,7 @@
 import { Disc, Smile, CloudRain, Zap, Coffee, Heart, Brain, Moon, Gamepad2, Car, PartyPopper, Flame, Volume2, CloudFog, Sunrise, Skull, Sparkles, BookOpen, Anchor, Mic2, Star, Umbrella, Activity, Speaker, Radio, Guitar, Dumbbell, Rocket, Mic, Music, Leaf, Headphones, Music2, Film, Piano, Flag, Drum, SpeakerHigh, Sun, MoonStar, User } from 'lucide-react';
 
+import { Disc, Smile, CloudRain, Zap, Coffee, Heart, Brain, Moon, Gamepad2, Car, PartyPopper, Flame, Volume2, CloudFog, Sunrise, Skull, Sparkles, BookOpen, Anchor, Mic2, Star, Umbrella, Activity, Speaker, Radio, Guitar, Dumbbell, Rocket, Mic, Music, Leaf, Headphones, Music2, Film, Piano, Flag, Drum, SpeakerHigh, Sun, MoonStar, User, Tv, Terminal } from 'lucide-react';
+
 export const MOOD_CATEGORIES = [
     {
         name: "High Energy & Hype",
@@ -9,6 +11,7 @@ export const MOOD_CATEGORIES = [
             { id: "Energetic", icon: Zap, desc: "Penuh tenaga, cocok untuk olahraga atau aktivitas fisik berat." },
             { id: "Party", icon: PartyPopper, desc: "Suasana pesta, klub malam, dance floor, EDM." },
             { id: "Gaming", icon: Gamepad2, desc: "Elektronik, dubstep, atau background music untuk fokus main game kompetitif." },
+            { id: "DJ", icon: Disc, desc: "Remix Jedag Jedug, DJ lokal, bass boosted, asik buat goyang." },
         ]
     },
     {
@@ -17,7 +20,9 @@ export const MOOD_CATEGORIES = [
             { id: "Relaxing", icon: Coffee, desc: "Santai, akustik, cocok untuk menemani ngopi di sore hari." },
             { id: "Chill", icon: CloudFog, desc: "Lo-fi beats, tempo lambat, suasana 'cool' dan tidak berisik." },
             { id: "Focus", icon: Brain, desc: "Meningkatkan konsentrasi, deep work, coding, minim vokal." },
-            { id: "Study", icon: BookOpen, desc: "Musik latar untuk belajar, membaca buku, perpustakaan." },
+            { id: "Study", icon: BookOpen, desc: "Musik latar untuk belajar, perpustakaan." },
+            { id: "Reading", icon: BookOpen, desc: "Musik instrumental ringan, ambient. Cocok banget buat background pas lagi asyik baca buku." },
+            { id: "Lofi Beats", icon: Headphones, desc: "Beat hip-hop lambat, suara hujan, nyaman buat background nyantai." },
             { id: "Sleep", icon: Moon, desc: "Sangat pelan, ambient, white noise, pengantar tidur nyenyak." },
         ]
     },
@@ -26,6 +31,7 @@ export const MOOD_CATEGORIES = [
         options: [
             { id: "Romance", icon: Heart, desc: "Lagu cinta, pernikahan, momen romantis bersama pasangan." },
             { id: "Sad", icon: CloudRain, desc: "Sedih, galau, patah hati, perpisahan, suasana mendung." },
+            { id: "Galau Brutal", icon: CloudRain, desc: "Level sedih maksimal, nangis di pojokan kamar, gagal move on." },
             { id: "Melancholic", icon: Umbrella, desc: "Rindu mendalam, nostalgia kenangan masa lalu, sendu." },
             { id: "Sentimental", icon: Star, desc: "Menyentuh hati, emosional, drama, soundtrack kehidupan." },
             { id: "Sexy", icon: Flame, desc: "Sensual, R&B, slow jam, suasana intim." },
@@ -46,6 +52,8 @@ export const MOOD_CATEGORIES = [
         options: [
             { id: "Dreamy", icon: Sparkles, desc: "Mengawang, reverb tebal, Shoegaze, Dream Pop." },
             { id: "Dark", icon: Skull, desc: "Misterius, suram, Gothic, mencekam." },
+            { id: "Epic", icon: Flame, desc: "Orkestra megah, boss fight, cinematic score yang bikin merinding." },
+            { id: "Cyberpunk", icon: Terminal, desc: "Synthwave, dark techno, vibes terminal. Pas buat nemenin ricing Arch Linux atau ngoding malam." },
             { id: "Peaceful", icon: Sunrise, desc: "Damai, meditasi, yoga, suara alam." },
             { id: "Travel", icon: Car, desc: "Road trip, menyetir, liburan." },
             { id: "Live", icon: Volume2, desc: "Rekaman konser, crowd noise." },
@@ -76,6 +84,7 @@ export const MOOD_CATEGORIES = [
         name: "Indie & Alternative",
         options: [
             { id: "Indie", icon: Leaf, desc: "Indie pop/rock, santai, jujur, emosional." },
+            { id: "Indie Senja", icon: Coffee, desc: "Folk lokal, akustik sore hari, lirik puitis soal kopi dan senja." },
             { id: "Alternative", icon: Headphones, desc: "Eksperimental, anti mainstream." },
         ]
     },
@@ -83,14 +92,16 @@ export const MOOD_CATEGORIES = [
         name: "Instrumental & OST",
         options: [
             { id: "Instrumental", icon: Music2, desc: "Tanpa vokal, fokus, deep work, coding." },
-            { id: "Soundtrack", icon: Film, desc: "Film, anime, game OST, cinematic." },
+            { id: "Soundtrack", icon: Film, desc: "Film, game OST, cinematic." },
+            { id: "Anime OST", icon: Tv, desc: "Opening/Ending song ikonik. Biar hype-nya makin kerasa pas lagi nonton." },
             { id: "Piano", icon: Piano, desc: "Piano solo, calm, emosional." },
         ]
     },
     {
         name: "Local & Cultural",
         options: [
-            { id: "Pop Indonesia", icon: Flag, desc: "Musik populer Indonesia." },
+            { id: "Pop Indonesia", icon: Flag, desc: "Musik populer Indonesia masa kini." },
+            { id: "Pop Indo Jadul", icon: Radio, desc: "Tembang kenangan, pop lawas era 80an, 90an, 2000an awal." },
             { id: "Dangdut", icon: Drum, desc: "Dangdut klasik hingga modern." },
             { id: "Koplo", icon: Speaker, desc: "Dangdut koplo, remix lokal, joget." },
             { id: "Jawa", icon: Star, desc: "Campursari, Pop Jawa, Gamelan." },
