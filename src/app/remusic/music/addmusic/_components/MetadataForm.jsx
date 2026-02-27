@@ -1,138 +1,9 @@
 import React, { useState } from 'react';
 import { Disc, Smile, CloudRain, Zap, Coffee, Heart, Brain, Moon, Gamepad2, Car, PartyPopper, Flame, Volume2, CloudFog, Sunrise, Skull, Sparkles, BookOpen, Anchor, Mic2, Star, Umbrella, Activity, Speaker, Radio, Guitar, Dumbbell, Rocket, Mic, Music, Leaf, Headphones, Music2, Film, Piano, Flag, Drum, SpeakerHigh, Sun, MoonStar, User, Search, X } from 'lucide-react';
+import { LANGUAGE_CATEGORIES, MOOD_CATEGORIES } from '../../_utils/constants';
 
 
 // --- DATABASE MOOD & GENRE VIBE ---
-const MOOD_CATEGORIES = [
-    // =======================
-    // DATA LAMA (TIDAK DIUBAH)
-    // =======================
-    {
-        name: "High Energy & Hype",
-        options: [
-            { id: "Brazilian Phonk", icon: Speaker, desc: "Bass distorsi berat, agresif, ritme funk cepat." },
-            { id: "Punk", icon: Skull, desc: "Pemberontak, tempo cepat, distorsi gitar kasar, energik." },
-            { id: "Energetic", icon: Zap, desc: "Penuh tenaga, cocok untuk olahraga atau aktivitas fisik berat." },
-            { id: "Party", icon: PartyPopper, desc: "Suasana pesta, klub malam, dance floor, EDM." },
-            { id: "Gaming", icon: Gamepad2, desc: "Elektronik, dubstep, atau background music untuk fokus main game kompetitif." },
-        ]
-    },
-    {
-        name: "Chill, Relax & Focus",
-        options: [
-            { id: "Relaxing", icon: Coffee, desc: "Santai, akustik, cocok untuk menemani ngopi di sore hari." },
-            { id: "Chill", icon: CloudFog, desc: "Lo-fi beats, tempo lambat, suasana 'cool' dan tidak berisik." },
-            { id: "Focus", icon: Brain, desc: "Meningkatkan konsentrasi, deep work, coding, minim vokal." },
-            { id: "Study", icon: BookOpen, desc: "Musik latar untuk belajar, membaca buku, perpustakaan." },
-            { id: "Sleep", icon: Moon, desc: "Sangat pelan, ambient, white noise, pengantar tidur nyenyak." },
-        ]
-    },
-    {
-        name: "Emotion & Romance",
-        options: [
-            { id: "Romance", icon: Heart, desc: "Lagu cinta, pernikahan, momen romantis bersama pasangan." },
-            { id: "Sad", icon: CloudRain, desc: "Sedih, galau, patah hati, perpisahan, suasana mendung." },
-            { id: "Melancholic", icon: Umbrella, desc: "Rindu mendalam, nostalgia kenangan masa lalu, sendu." },
-            { id: "Sentimental", icon: Star, desc: "Menyentuh hati, emosional, drama, soundtrack kehidupan." },
-            { id: "Sexy", icon: Flame, desc: "Sensual, R&B, slow jam, suasana intim." },
-        ]
-    },
-    {
-        name: "Styles & Genres",
-        options: [
-            { id: "Acoustic", icon: Guitar, desc: "Dominan instrumen asli (gitar/piano), organik, tanpa elektronik." },
-            { id: "Jazz", icon: Mic2, desc: "Smooth, improvisasi, saxophone, piano, berkelas." },
-            { id: "Classical", icon: Radio, desc: "Orkestra, piano klasik, biola, grand, timeless." },
-            { id: "Groovy", icon: Disc, desc: "Bassline asik, Funk, Disco, City Pop." },
-            { id: "Retro", icon: Anchor, desc: "Nuansa jadul (80s/90s), Synthwave, Vaporwave." },
-        ]
-    },
-    {
-        name: "Atmosphere",
-        options: [
-            { id: "Dreamy", icon: Sparkles, desc: "Mengawang, reverb tebal, Shoegaze, Dream Pop." },
-            { id: "Dark", icon: Skull, desc: "Misterius, suram, Gothic, mencekam." },
-            { id: "Peaceful", icon: Sunrise, desc: "Damai, meditasi, yoga, suara alam." },
-            { id: "Travel", icon: Car, desc: "Road trip, menyetir, liburan." },
-            { id: "Live", icon: Volume2, desc: "Rekaman konser, crowd noise." },
-        ]
-    },
-
-    // =======================
-    // DATA BARU (DITAMBAHKAN)
-    // =======================
-
-    {
-        name: "Workout & Motivation",
-        options: [
-            { id: "Workout", icon: Dumbbell, desc: "Musik gym, cardio, HIIT, tempo cepat dan kuat." },
-            { id: "Motivational", icon: Rocket, desc: "Uplifting, mindset booster, semangat produktif." },
-        ]
-    },
-    {
-        name: "Hip-Hop & Urban",
-        options: [
-            { id: "Hip-Hop", icon: Mic, desc: "Rap, trap, boom bap, urban culture." },
-            { id: "R&B", icon: Music, desc: "Smooth, soulful, modern urban vibe." },
-        ]
-    },
-    {
-        name: "Rock & Metal",
-        options: [
-            { id: "Rock", icon: Zap, desc: "Alternative rock, indie rock, classic rock." },
-            { id: "Metal", icon: Flame, desc: "Heavy metal, metalcore, agresif dan powerful." },
-        ]
-    },
-    {
-        name: "Indie & Alternative",
-        options: [
-            { id: "Indie", icon: Leaf, desc: "Indie pop/rock, santai, jujur, emosional." },
-            { id: "Alternative", icon: Headphones, desc: "Eksperimental, anti mainstream." },
-        ]
-    },
-    {
-        name: "Instrumental & OST",
-        options: [
-            { id: "Instrumental", icon: Music2, desc: "Tanpa vokal, fokus, deep work, coding." },
-            { id: "Soundtrack", icon: Film, desc: "Film, anime, game OST, cinematic." },
-            { id: "Piano", icon: Piano, desc: "Piano solo, calm, emosional." },
-        ]
-    },
-    {
-        name: "Local & Cultural",
-        options: [
-            { id: "Pop Indonesia", icon: Flag, desc: "Musik populer Indonesia." },
-            { id: "Dangdut", icon: Drum, desc: "Dangdut klasik hingga modern." },
-            { id: "Koplo", icon: Speaker, desc: "Dangdut koplo, remix lokal, joget." },
-        ]
-    },
-    {
-        name: "Daily Mood",
-        options: [
-            { id: "Morning", icon: Sun, desc: "Fresh pagi hari, mood cerah." },
-            { id: "Night Drive", icon: MoonStar, desc: "Nyetir malam, city lights." },
-            { id: "Rainy Day", icon: CloudRain, desc: "Hujan, sendu, tenang." },
-            { id: "Lonely", icon: User, desc: "Sepi, reflektif, menenangkan." },
-        ]
-    }
-];
-
-const LANGUAGES = [
-    { id: "id", label: "Indonesia", flag: "🇮🇩" },
-    { id: "en", label: "English", flag: "🇬🇧" },
-    { id: "es", label: "Spanish", flag: "🇪🇸" },
-    { id: "fr", label: "French", flag: "🇫🇷" },
-    { id: "pt", label: "Portuguese", flag: "🇵🇹" },
-    { id: "de", label: "German", flag: "🇩🇪" },
-    { id: "it", label: "Italian", flag: "🇮🇹" },
-    { id: "ru", label: "Russian", flag: "🇷🇺" },
-    { id: "ar", label: "Arabic", flag: "🇸🇦" },
-    { id: "hi", label: "Hindi", flag: "🇮🇳" },
-    { id: "jp", label: "Japanese", flag: "🇯🇵" },
-    { id: "kr", label: "Korean", flag: "🇰🇷" },
-    { id: "mn", label: "Mandarin", flag: "🇨🇳" },
-    { id: "other", label: "Other / Mixed", flag: "🌍" },
-];
 
 
 export default function MetadataForm({
@@ -146,36 +17,18 @@ export default function MetadataForm({
     // State lokal untuk pencarian mood (tidak perlu dikirim ke parent)
     const [searchTerm, setSearchTerm] = useState("");
     const [isAnalyzingMood, setIsAnalyzingMood] = useState(false);
+    const [isDetectingLanguage, setIsDetectingLanguage] = useState(false);
     const [isTranslating, setIsTranslating] = useState(false);
-    const [tagInput, setTagInput] = useState("");
-
-    const handleKeyDown = (e) => {
-        if (e.key === 'Enter' || e.key === ',') {
-            e.preventDefault();
-            addArtistTag();
-        }
-    };
-
-    const addArtistTag = () => {
-        const trimmedInput = tagInput.trim();
-        if (trimmedInput && !featuredArtists.includes(trimmedInput)) {
-            setFeaturedArtists([...featuredArtists, trimmedInput]);
-            setTagInput('');
-        }
-    };
-
-    const removeTag = (indexToRemove) => {
-        setFeaturedArtists(featuredArtists.filter((_, index) => index !== indexToRemove));
-    };
-
     const handleAnalyzeMood = async () => {
         if (!lyricsRaw.trim()) return alert("Lyrics cannot be empty for mood analysis.");
+        if (!language) return alert("Please select a Song Language first to help the AI detect precise regional moods.");
+
         setIsAnalyzingMood(true);
         try {
             const res = await fetch('/api/ai-generate', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ type: 'mood', text: lyricsRaw })
+                body: JSON.stringify({ type: 'mood', text: lyricsRaw, language })
             });
             const data = await res.json();
             if (data.success && data.moods) {
@@ -190,6 +43,29 @@ export default function MetadataForm({
             alert("Error analyzing mood");
         } finally {
             setIsAnalyzingMood(false);
+        }
+    };
+
+    const handleDetectLanguage = async () => {
+        if (!lyricsRaw.trim()) return alert("Lyrics cannot be empty for language detection.");
+        setIsDetectingLanguage(true);
+        try {
+            const res = await fetch('/api/ai-generate', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ type: 'language', text: lyricsRaw })
+            });
+            const data = await res.json();
+            if (data.success && data.language) {
+                setLanguage(data.language);
+            } else {
+                alert("Failed to detect language: " + (data.error || "Unknown error"));
+            }
+        } catch (error) {
+            console.error(error);
+            alert("Error detecting language");
+        } finally {
+            setIsDetectingLanguage(false);
         }
     };
 
@@ -243,67 +119,45 @@ export default function MetadataForm({
                 />
             </div>
 
-            <div className="space-y-2">
-                <label className="text-xs font-bold uppercase tracking-wider opacity-70 flex items-center gap-1">
-                    Song Language <span className="text-red-500">*</span>
-                </label>
-                <div className="flex flex-wrap gap-3">
-                    {LANGUAGES.map((lang) => (
-                        <button
-                            key={lang.id}
-                            type="button"
-                            onClick={() => setLanguage(lang.id)}
-                            className={`
-                                flex items-center gap-2 px-4 py-2.5 rounded-xl border transition-all text-sm font-bold
-                                ${language === lang.id
-                                    ? 'bg-indigo-600 border-indigo-500 text-white shadow-lg shadow-indigo-500/20'
-                                    : `${theme.inputBg} border-slate-700 hover:border-slate-500 text-slate-400 hover:text-white`
-                                }
-                            `}
-                        >
-                            <span className="text-lg">{lang.flag}</span>
-                            <span>{lang.label}</span>
-                        </button>
-                    ))}
-                </div>
-            </div>
-
-            {/* Featured Artists Input */}
-            <div className="space-y-2">
-                <label className="text-xs font-bold uppercase tracking-wider opacity-70 flex items-center gap-1">
-                    Featured Artists <span className="text-[10px] font-normal lowercase opacity-50 ml-1">(Optional - Type & Enter)</span>
-                </label>
-
-                <div className="flex gap-2">
-                    <input
-                        type="text"
-                        value={tagInput}
-                        onChange={(e) => setTagInput(e.target.value)}
-                        onKeyDown={handleKeyDown}
-                        placeholder="E.g. Cardi B, DJ Khaled (Press Enter)"
-                        className={`flex-1 ${theme.inputBg} border ${theme.border} rounded-xl px-4 py-2.5 outline-none transition-all text-sm`}
-                    />
+            <div className="space-y-4">
+                <div className="flex justify-between items-center">
+                    <label className="text-xs font-bold uppercase tracking-wider opacity-70 flex items-center gap-1">
+                        Song Language <span className="text-red-500">*</span>
+                    </label>
                     <button
                         type="button"
-                        onClick={addArtistTag}
-                        className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-xl text-sm font-bold transition-colors"
+                        onClick={handleDetectLanguage}
+                        disabled={isDetectingLanguage || !lyricsRaw.trim()}
+                        className={`text-[10px] font-bold py-1 px-2.5 rounded-lg flex items-center gap-1.5 transition-all ${isDetectingLanguage ? 'bg-slate-700 text-slate-400 cursor-not-allowed' : 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white hover:shadow-[0_0_15px_rgba(79,70,229,0.4)] hover:scale-105 active:scale-95'}`}
                     >
-                        Add
+                        {isDetectingLanguage ? <><Sparkles className="animate-spin" size={12} /> Detecting...</> : <><Sparkles size={12} /> Auto Detect</>}
                     </button>
                 </div>
-
-                {/* Chips */}
-                <div className="flex flex-wrap gap-2 mt-2">
-                    {featuredArtists && featuredArtists.map((artist, index) => (
-                        <div key={index} className="bg-indigo-500/10 text-indigo-400 px-3 py-1 rounded-full text-xs font-bold flex items-center gap-2 border border-indigo-500/20">
-                            <span>{artist}</span>
-                            <button
-                                type="button"
-                                onClick={() => removeTag(index)}
-                                className="hover:text-white focus:outline-none transition-colors"
-                            >
-                                <X size={12} />
-                            </button>
+                <div className="space-y-6">
+                    {LANGUAGE_CATEGORIES.map((category) => (
+                        <div key={category.name} className="space-y-3">
+                            <h4 className="text-[10px] font-bold uppercase text-indigo-400 tracking-widest border-b border-dashed border-slate-700/50 pb-1 w-fit">
+                                {category.name}
+                            </h4>
+                            <div className="flex flex-wrap gap-2.5">
+                                {category.options.map((lang) => (
+                                    <button
+                                        key={lang.id}
+                                        type="button"
+                                        onClick={() => setLanguage(lang.id)}
+                                        className={`
+                                            flex items-center gap-2 px-3.5 py-2.5 rounded-xl border transition-all text-sm font-bold
+                                            ${language === lang.id
+                                                ? 'bg-indigo-600 border-indigo-500 text-white shadow-lg shadow-indigo-500/20'
+                                                : `${theme.inputBg} ${theme.border} hover:border-indigo-400 ${theme.textMuted} hover:${theme.text} hover:bg-indigo-500/5`
+                                            }
+                                        `}
+                                    >
+                                        <span className="text-lg">{lang.flag}</span>
+                                        <span className="text-xs md:text-sm">{lang.label}</span>
+                                    </button>
+                                ))}
+                            </div>
                         </div>
                     ))}
                 </div>

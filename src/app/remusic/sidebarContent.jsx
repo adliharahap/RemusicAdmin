@@ -5,13 +5,13 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useTheme } from "next-themes";
 import { motion, AnimatePresence } from "framer-motion";
-import { 
-  LogOut, 
-  X, 
-  ChevronDown, 
-  Sun, 
-  Moon, 
-  Laptop, 
+import {
+  LogOut,
+  X,
+  ChevronDown,
+  Sun,
+  Moon,
+  Laptop,
   MoreVertical,
   ChevronRight,
   Settings
@@ -45,8 +45,8 @@ const MenuItem = ({ item, pathname, depth = 0 }) => {
         <button
           onClick={() => setIsOpen(!isOpen)}
           className={classNames(
-            isActive 
-              ? 'bg-indigo-50/10 text-indigo-400 dark:text-indigo-400' 
+            isActive
+              ? 'bg-indigo-50/10 text-indigo-400 dark:text-indigo-400'
               : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-white/5 hover:text-slate-900 dark:hover:text-white',
             'group flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-200'
           )}
@@ -55,8 +55,8 @@ const MenuItem = ({ item, pathname, depth = 0 }) => {
             {Icon && <Icon className={classNames(isActive ? 'text-indigo-500' : 'text-slate-400 group-hover:text-slate-600 dark:group-hover:text-slate-300', "h-5 w-5 shrink-0 transition-colors")} />}
             <span>{item.name}</span>
           </div>
-          <ChevronRight 
-            className={`h-4 w-4 text-slate-400 transition-transform duration-200 ${isOpen ? 'rotate-90' : ''}`} 
+          <ChevronRight
+            className={`h-4 w-4 text-slate-400 transition-transform duration-200 ${isOpen ? 'rotate-90' : ''}`}
           />
         </button>
 
@@ -154,8 +154,8 @@ const ThemeSwitcher = () => {
                   setIsOpen(false);
                 }}
                 className={classNames(
-                  theme === t.value 
-                    ? 'bg-indigo-50 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400' 
+                  theme === t.value
+                    ? 'bg-indigo-50 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400'
                     : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-white/5',
                   'flex w-full items-center gap-2 px-3 py-2 text-xs font-medium rounded-lg transition-colors'
                 )}
@@ -177,16 +177,16 @@ export default function SidebarContent({ navigation, user, onClose }) {
 
   return (
     <div className="flex h-full grow flex-col gap-y-5 overflow-y-auto bg-white dark:bg-[#0F1117] px-6 pb-4 border-r border-slate-200 dark:border-white/5 transition-colors duration-300">
-      
+
       {/* Header / Logo */}
       <div className="flex h-20 shrink-0 items-center justify-between">
         <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center text-white font-bold text-lg shadow-lg shadow-indigo-500/30">
-                R
-            </div>
-            <h1 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight">
+          <div className="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center text-white font-bold text-lg shadow-lg shadow-indigo-500/30">
+            R
+          </div>
+          <h1 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight">
             ReMusic<span className="text-indigo-500">.</span>
-            </h1>
+          </h1>
         </div>
         <button
           type="button"
@@ -205,17 +205,17 @@ export default function SidebarContent({ navigation, user, onClose }) {
           ))}
 
           <li className="mt-auto pt-6 border-t border-slate-200 dark:border-white/5">
-             <div className="flex items-center justify-between mb-2">
-                 <p className="text-[10px] uppercase tracking-wider font-bold text-slate-400 dark:text-slate-600 px-2">Settings</p>
-             </div>
-             
-             {/* Logout Button */}
-             <button
-                onClick={logout}
-                className="group flex w-full gap-x-3 rounded-xl px-3 py-2.5 text-sm font-medium leading-6 text-slate-500 dark:text-slate-400 hover:bg-red-50 dark:hover:bg-red-500/10 hover:text-red-600 dark:hover:text-red-400 transition-all duration-200"
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-[10px] uppercase tracking-wider font-bold text-slate-400 dark:text-slate-600 px-2">Settings</p>
+            </div>
+
+            {/* Logout Button */}
+            <button
+              onClick={logout}
+              className="group flex w-full gap-x-3 rounded-xl px-3 py-2.5 text-sm font-medium leading-6 text-slate-500 dark:text-slate-400 hover:bg-red-50 dark:hover:bg-red-500/10 hover:text-red-600 dark:hover:text-red-400 transition-all duration-200"
             >
-                <LogOut className="h-5 w-5 shrink-0 transition-transform group-hover:-translate-x-1" aria-hidden="true" />
-                Logout
+              <LogOut className="h-5 w-5 shrink-0 transition-transform group-hover:-translate-x-1" aria-hidden="true" />
+              Logout
             </button>
           </li>
         </ul>
@@ -234,7 +234,7 @@ export default function SidebarContent({ navigation, user, onClose }) {
             {user?.display_name || user?.user_metadata?.full_name || "Unknown user"}
           </p>
           <p className="text-xs text-slate-500 dark:text-slate-400 truncate">
-             {user?.role || "User"}
+            {user?.role || "User"}
           </p>
         </div>
 

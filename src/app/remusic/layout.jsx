@@ -4,7 +4,7 @@ import SidebarContent from "./sidebarContent";
 import { usePathname } from "next/navigation";
 import { useSelector } from "react-redux";
 import LoadingScreen from "../LoadingPage";
-import { Album, GitPullRequestCreateArrowIcon, HomeIcon, Mic2Icon, MicIcon, Music, Send, UserIcon, Activity, BookOpen, Github } from "lucide-react";
+import { Album, GitPullRequestCreateArrowIcon, HomeIcon, Mic2Icon, MicIcon, Music, Bell, UserIcon, Activity, BookOpen, Github } from "lucide-react";
 
 
 const navigation = [
@@ -14,7 +14,7 @@ const navigation = [
   { name: 'Artis', href: '/remusic/artist', icon: MicIcon, },
   { name: 'Playlist', href: '/remusic/playlist', icon: Album, },
   { name: 'Song Request By User', href: '/remusic/songrequest', icon: GitPullRequestCreateArrowIcon, },
-  { name: 'Send Notification To User', href: '/remusic/sendnotification', icon: Send, },
+  { name: 'Push Notifications', href: '/remusic/notifications', icon: Bell, },
   { name: 'System Health', href: '/remusic/system-health', icon: Activity },
   { name: 'GitHub Upload', href: '/remusic/github-upload', icon: Github },
   { name: 'Tutorial & Tools', href: '/remusic/tutorial', icon: BookOpen },

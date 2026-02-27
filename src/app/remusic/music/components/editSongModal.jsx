@@ -11,6 +11,7 @@ import {
 import { useTheme } from 'next-themes';
 import { supabase } from '../../../../../lib/supabaseClient';
 import axios from 'axios';
+import { LANGUAGE_CATEGORIES, MOOD_CATEGORIES } from '../_utils/constants';
 
 // --- HELPER: Parse Lirik LRC ---
 const parseLrc = (lrcString) => {
@@ -81,6 +82,9 @@ export default function EditSongModal({ isOpen, onClose, song, onSuccess }) {
                 title: song.title || "",
                 artist_id: song.artist_id || "",
                 artist_name: song.artists?.name || 'Unknown Artist',
+                featured_artists: song.featured_artists || [],
+                language: song.language || "",
+                moods: song.moods || [],
                 cover_url: song.cover_url || "",
                 canvas_url: song.canvas_url || "",
                 audio_url: song.audio_url || "",
@@ -219,6 +223,25 @@ export default function EditSongModal({ isOpen, onClose, song, onSuccess }) {
         }
     };
 
+    const handleMoodToggle = (mood) => {
+        setFormData(prev => {
+            const newMoods = (prev.moods || []).includes(mood)
+                ? prev.moods.filter(m => m !== mood)
+                : [...(prev.moods || []), mood];
+            return { ...prev, moods: newMoods };
+        });
+    };
+
+    const handleLanguageChange = (e) => {
+        setFormData(prev => ({ ...prev, language: e.target.value }));
+    };
+
+    const handleFeaturedArtistsChange = (e) => {
+        const val = e.target.value;
+        const arrayVal = val ? val.split(',').map(s => s.trim()) : [];
+        setFormData(prev => ({ ...prev, featured_artists: arrayVal }));
+    };
+
     const playLine = (timestamp, index) => {
         if (audioRef.current) {
             audioRef.current.currentTime = timestamp;
@@ -272,6 +295,9 @@ export default function EditSongModal({ isOpen, onClose, song, onSuccess }) {
                 audio_url: formData.audio_url || null,
                 cover_url: formData.cover_url || null,
                 canvas_url: formData.canvas_url || null,
+                language: formData.language,
+                moods: formData.moods,
+                featured_artists: formData.featured_artists,
                 updated_at: new Date().toISOString(),
             };
 
@@ -462,7 +488,79 @@ export default function EditSongModal({ isOpen, onClose, song, onSuccess }) {
                                     </div>
                                 </div>
 
-                                {/* SECTION 2: VISUAL ASSETS */}
+                                {/* SECTION 1.5: CATEGORIES & CONFIG */}
+                                <div className={`p-4 rounded-xl border ${theme.border} ${theme.inputBg} space-y-4`}>
+                                    <h3 className={`text-xs font-bold uppercase tracking-wider ${theme.textMuted} flex items-center gap-2`}>
+                                        <Disc size={14} /> Categories & Config
+                                    </h3>
+
+                                    <div className="space-y-1">
+                                        <label className="text-[10px] font-semibold opacity-70">Language/Region *</label>
+                                        <select
+                                            value={formData.language || ""}
+                                            onChange={handleLanguageChange}
+                                            className={`w-full p-2 text-xs rounded-lg border ${theme.border} focus:ring-1 focus:ring-indigo-500 outline-none ${isDarkMode ? 'bg-slate-800 text-white' : 'bg-white text-slate-900'}`}
+                                            required
+                                        >
+                                            <option value="" disabled>Select Language...</option>
+                                            {LANGUAGE_CATEGORIES.map(cat => (
+                                                <optgroup key={cat.name} label={cat.name}>
+                                                    {cat.options.map(opt => (
+                                                        <option key={opt.id} value={opt.id}>{opt.flag} {opt.label}</option>
+                                                    ))}
+                                                </optgroup>
+                                            ))}
+                                        </select>
+                                    </div>
+
+                                    <div className="space-y-1">
+                                        <label className="text-[10px] font-semibold opacity-70">Featured Artists (comma separated)</label>
+                                        <input
+                                            type="text"
+                                            value={(formData.featured_artists || []).join(', ')}
+                                            onChange={handleFeaturedArtistsChange}
+                                            placeholder="feat. Artis A, Artis B"
+                                            className={`w-full p-2 text-xs rounded-lg border ${theme.border} bg-transparent focus:ring-1 focus:ring-indigo-500 outline-none`}
+                                        />
+                                    </div>
+
+                                    <div className="space-y-1">
+                                        <label className="text-[10px] font-semibold opacity-70 flex justify-between">
+                                            <span>Moods * <span className="text-emerald-500">{(formData.moods || []).length} Selected</span></span>
+                                        </label>
+                                        <div className={`max-h-64 overflow-y-auto p-2 rounded-lg border ${theme.border} space-y-4 ${theme.scrollHide}`}>
+                                            {MOOD_CATEGORIES.map((category) => (
+                                                <div key={category.name}>
+                                                    <div className="text-[10px] uppercase font-bold text-slate-500 mb-2">{category.name}</div>
+                                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                                                        {category.options.map((mood) => {
+                                                            const isSelected = (formData.moods || []).includes(mood.id);
+                                                            return (
+                                                                <button
+                                                                    type="button"
+                                                                    key={mood.id}
+                                                                    onClick={() => handleMoodToggle(mood.id)}
+                                                                    className={`flex flex-col items-start gap-1 p-2 rounded-lg border text-left transition-all ${isSelected
+                                                                        ? "bg-indigo-600/20 border-indigo-500 text-indigo-400 shadow-sm shadow-indigo-500/10"
+                                                                        : `${theme.inputBg} ${theme.border} ${theme.textMuted} hover:border-indigo-400/50 hover:bg-indigo-500/5`
+                                                                        }`}
+                                                                >
+                                                                    <div className={`flex items-center gap-1.5 text-xs font-bold ${isSelected ? 'text-indigo-400' : theme.text}`}>
+                                                                        <mood.icon size={14} className={isSelected ? 'text-indigo-400' : ''} />
+                                                                        {mood.id}
+                                                                    </div>
+                                                                    <div className={`text-[9px] leading-tight ${isSelected ? 'text-indigo-300' : 'opacity-60'} line-clamp-2`}>
+                                                                        {mood.desc}
+                                                                    </div>
+                                                                </button>
+                                                            );
+                                                        })}
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                </div>
                                 {/* SECTION 2: VISUAL ASSETS */}
                                 <div className={`p-4 rounded-xl border ${theme.border} ${theme.inputBg} space-y-4`}>
                                     <h3 className={`text-xs font-bold uppercase tracking-wider ${theme.textMuted} flex items-center gap-2`}>

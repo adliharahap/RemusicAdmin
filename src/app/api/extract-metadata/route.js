@@ -69,9 +69,36 @@ export async function POST(req) {
         // Extract relevant data
         const { common, format } = metadata;
         const title = common.title || '';
-        const artist = common.artist || '';
+        let artist = common.artist || '';
+        let artists = common.artists || [];
+
+        // If music-metadata didn't find multiple artists in the array,
+        // let's try to split the string ourselves. Telegram and some ID3 tags 
+        // use '/', ',', or ' feat. ' to separate artists in the 'performer' field.
+        if (artists.length <= 1 && artist) {
+            // Split by common delimiters: /, comma, &, feat., ft.
+            const splitRegex = /\/|,| & | feat\. | ft\. /i;
+            const potentialArtists = artist.split(splitRegex).map(a => a.trim()).filter(a => a.length > 0);
+            if (potentialArtists.length > 1) {
+                artists = potentialArtists;
+                // Keep the first one as the main artist
+                artist = potentialArtists[0];
+            } else {
+                artists = [artist];
+            }
+        } else if (artists.length === 0 && artist) {
+            artists = [artist];
+        }
+
         const duration = format.duration ? Math.round(format.duration * 1000) : 0;
         
+        console.log("--- METADATA EXTRACTION LOGS ---");
+        console.log("Raw Artist:", common.artist);
+        console.log("Raw Artists array:", common.artists);
+        console.log("Processed Artist:", artist);
+        console.log("Processed Artists array:", artists);
+        console.log("--------------------------------");
+
         let cover = null;
         if (common.picture && common.picture.length > 0) {
             const pic = common.picture[0];
@@ -85,6 +112,7 @@ export async function POST(req) {
             success: true,
             title,
             artist,
+            artists,
             duration,
             cover
         });

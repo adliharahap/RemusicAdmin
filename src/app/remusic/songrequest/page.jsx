@@ -23,10 +23,11 @@ export default function SongRequestPage() {
     const [updatingId, setUpdatingId] = useState(null);
     const [searchTerm, setSearchTerm] = useState("");
 
-    // Rejection Modal State
-    const [isRejectModalOpen, setIsRejectModalOpen] = useState(false);
-    const [rejectReason, setRejectReason] = useState("");
-    const [selectedRejectId, setSelectedRejectId] = useState(null);
+    // Action Modal State (For Rejected & Fulfilled notes)
+    const [isActionModalOpen, setIsActionModalOpen] = useState(false);
+    const [actionNote, setActionNote] = useState("");
+    const [selectedActionId, setSelectedActionId] = useState(null);
+    const [actionType, setActionType] = useState('rejected'); // 'rejected' atau 'fulfilled'
 
     // Fetch Requests
     const fetchRequests = async () => {
@@ -61,11 +62,12 @@ export default function SongRequestPage() {
         const currentRequest = requests.find(r => r.id === id);
         if (currentRequest?.status === 'fulfilled') return;
 
-        // If Rejected, open modal first
-        if (newStatus === 'rejected') {
-            setSelectedRejectId(id);
-            setRejectReason("");
-            setIsRejectModalOpen(true);
+        // Make 'rejected' or 'fulfilled' show modal for reason/note
+        if (newStatus === 'rejected' || newStatus === 'fulfilled') {
+            setSelectedActionId(id);
+            setActionType(newStatus);
+            setActionNote("");
+            setIsActionModalOpen(true);
             return;
         }
 
@@ -86,6 +88,57 @@ export default function SongRequestPage() {
 
             if (error) throw error;
 
+            // Trigger Notifications (FCM & Database) if Supported (Published or Rejected)
+            if (status === 'fulfilled' || status === 'rejected') {
+                const currentReq = requests.find(r => r.id === id);
+                if (currentReq && currentReq.requester_id) {
+                    try {
+                        const notifTitle = status === 'fulfilled' ? "Request Lagu Dirilis!" : "Request Lagu Ditolak";
+                        const notifBody = status === 'fulfilled'
+                            ? `Yey! Lagu "${currentReq.song_title} - ${currentReq.artist_name}" sudah bisa kamu dengarkan sekarang.`
+                            : `Maaf, request lagu "${currentReq.song_title}" tidak dapat kami penuhi. Alasan: ${reason || 'Tidak didefinisikan'}`;
+
+                        // 1. Insert ke Tabel Notifications (Database Personal Notif)
+                        await supabase.from('notifications').insert({
+                            user_id: currentReq.requester_id,
+                            title: notifTitle,
+                            message: notifBody,
+                            type: 'song_request',
+                            reference_id: currentReq.id,
+                            image_url: currentReq.cover_url || null,
+                            is_read: false
+                        });
+
+                        // 2. Ambil FCM Token user dari Supabase
+                        const { data: userData } = await supabase
+                            .from('users')
+                            .select('fcm_token')
+                            .eq('id', currentReq.requester_id)
+                            .single();
+
+                        if (userData && userData.fcm_token) {
+                            // 3. Panggil API Internal untuk Push Notification
+                            await fetch('/api/send-notification', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({
+                                    title: notifTitle,
+                                    message: notifBody,
+                                    tokens: [userData.fcm_token],
+                                    data: {
+                                        type: status === 'fulfilled' ? 'song_published' : 'song_rejected',
+                                        requestId: currentReq.id
+                                    },
+                                    ...(currentReq.cover_url && { imageUrl: currentReq.cover_url })
+                                })
+                            });
+                        }
+                    } catch (notifErr) {
+                        console.warn("Gagal mengirim notifikasi (DB/FCM mungkin bermasalah):", notifErr);
+                    }
+                }
+            }
+
             // Optimistic Update
             setRequests(prev => prev.map(req =>
                 req.id === id ? { ...req, status, rejection_reason: reason } : req
@@ -99,12 +152,14 @@ export default function SongRequestPage() {
         }
     };
 
-    const confirmRejection = async () => {
-        if (!rejectReason.trim()) return alert("Alasan penolakan wajib diisi.");
+    const confirmAction = async () => {
+        if (actionType === 'rejected' && !actionNote.trim()) {
+            return alert("Catatan/Alasan penolakan wajib diisi.");
+        }
 
-        await updateRequestStatus(selectedRejectId, 'rejected', rejectReason);
-        setIsRejectModalOpen(false);
-        setSelectedRejectId(null);
+        await updateRequestStatus(selectedActionId, actionType, actionNote);
+        setIsActionModalOpen(false);
+        setSelectedActionId(null);
     };
 
     // Helper: Status Config
@@ -156,8 +211,8 @@ export default function SongRequestPage() {
                             key={key}
                             onClick={() => setFilter(key === filter ? "all" : key)}
                             className={`px-4 py-2 rounded-lg text-sm font-medium capitalize whitespace-nowrap transition-all ${filter === key
-                                    ? "bg-indigo-50 dark:bg-indigo-500/20 text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-500/30"
-                                    : "text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 border border-transparent"
+                                ? "bg-indigo-50 dark:bg-indigo-500/20 text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-500/30"
+                                : "text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 border border-transparent"
                                 }`}
                         >
                             {STATUS_CONFIG[key].label}
@@ -210,17 +265,30 @@ export default function SongRequestPage() {
                                             >
                                                 <td className="p-4">
                                                     <div className="flex items-center gap-3">
-                                                        <div className="w-10 h-10 rounded-lg bg-indigo-100 dark:bg-indigo-500/20 flex items-center justify-center text-indigo-600 dark:text-indigo-400">
-                                                            <Music2 className="w-5 h-5" />
-                                                        </div>
+                                                        {request.cover_url ? (
+                                                            <div className="w-10 h-10 shrink-0">
+                                                                <img src={request.cover_url} alt="Cover" className="w-full h-full rounded-lg object-cover shadow-sm bg-slate-200 dark:bg-slate-800" />
+                                                            </div>
+                                                        ) : (
+                                                            <div className="w-10 h-10 rounded-lg bg-indigo-100 dark:bg-indigo-500/20 flex items-center justify-center text-indigo-600 dark:text-indigo-400 shrink-0">
+                                                                <Music2 className="w-5 h-5" />
+                                                            </div>
+                                                        )}
                                                         <div>
-                                                            <p className="font-medium text-slate-900 dark:text-white">{request.song_title}</p>
-                                                            <p className="text-xs text-slate-500 dark:text-slate-400">{request.artist_name}</p>
+                                                            <p className="font-medium text-slate-900 dark:text-white line-clamp-1" title={request.song_title}>{request.song_title}</p>
+                                                            <div className="flex items-center gap-1.5 mt-0.5">
+                                                                {request.artist_photo_url && (
+                                                                    <img src={request.artist_photo_url} alt="Artist" className="w-4 h-4 rounded-full object-cover" />
+                                                                )}
+                                                                <p className="text-xs text-slate-500 dark:text-slate-400 line-clamp-1">{request.artist_name}</p>
+                                                            </div>
                                                             {request.note && (
-                                                                <p className="text-[10px] text-slate-400 mt-0.5 italic">"{request.note}"</p>
+                                                                <p className="text-[10px] text-slate-400 mt-1 italic line-clamp-2">"User Note: {request.note}"</p>
                                                             )}
-                                                            {request.rejection_reason && request.status === 'rejected' && (
-                                                                <p className="text-[10px] text-red-400 mt-0.5 font-medium">Reason: {request.rejection_reason}</p>
+                                                            {request.rejection_reason && request.status !== 'pending' && (
+                                                                <p className={`text-[10px] mt-0.5 font-medium ${request.status === 'rejected' ? 'text-red-400' : 'text-emerald-500'}`}>
+                                                                    Admin Note: {request.rejection_reason}
+                                                                </p>
                                                             )}
                                                         </div>
                                                     </div>
@@ -260,12 +328,15 @@ export default function SongRequestPage() {
                                                 </td>
                                                 <td className="p-4 text-right">
                                                     <div className="flex items-center justify-end gap-2">
-                                                        {request.status === 'fulfilled' && request.requester?.email && (
+                                                        {(request.status === 'fulfilled' || request.status === 'rejected') && request.requester?.email && (
                                                             <a
-                                                                href={`mailto:${request.requester.email}?subject=Lagu Request Anda Telah Ditambahkan! - Remusic&body=Halo ${request.requester.display_name},%0D%0A%0D%0AKabar gembira! Lagu yang Anda request "%20${request.song_title} - ${request.artist_name}%20" telah kami tambahkan ke Remusic.%0D%0A%0D%0ASilakan cek aplikasi sekarang untuk mendengarkannya!%0D%0A%0D%0ATerima kasih,%0D%0ATim Remusic`}
+                                                                href={`mailto:${request.requester.email}?subject=Status Request Lagu Anda - Remusic&body=Halo ${request.requester.display_name},%0D%0A%0D%0A${request.status === 'fulfilled'
+                                                                    ? `Kabar gembira! Lagu yang Anda request "%20${request.song_title} - ${request.artist_name}%20" telah kami tambahkan ke Remusic.%0D%0A${request.rejection_reason ? `%0D%0ACatatan admin: ${request.rejection_reason}%0D%0A` : ''}%0D%0ASilakan cek aplikasi sekarang untuk mendengarkannya!`
+                                                                    : `Mohon maaf, request lagu "%20${request.song_title} - ${request.artist_name}%20" belum dapat kami penuhi saat ini.%0D%0A${request.rejection_reason ? `%0D%0ACatatan admin: ${request.rejection_reason}%0D%0A` : ''}`
+                                                                    }%0D%0A%0D%0ATerima kasih,%0D%0ATim Remusic`}
                                                                 target="_blank"
                                                                 rel="noopener noreferrer"
-                                                                className="p-2 text-emerald-500 hover:bg-emerald-500/10 rounded-lg transition-colors"
+                                                                className={`p-2 rounded-lg transition-colors ${request.status === 'fulfilled' ? 'text-emerald-500 hover:bg-emerald-500/10' : 'text-red-500 hover:bg-red-500/10'}`}
                                                                 title="Kirim Email Notifikasi"
                                                             >
                                                                 <Mail className="w-4 h-4" />
@@ -304,9 +375,9 @@ export default function SongRequestPage() {
                 )}
             </div>
 
-            {/* Rejection Modal */}
+            {/* Action Item Modal */}
             <AnimatePresence>
-                {isRejectModalOpen && (
+                {isActionModalOpen && (
                     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
                         <motion.div
                             initial={{ opacity: 0, scale: 0.95 }}
@@ -316,41 +387,48 @@ export default function SongRequestPage() {
                         >
                             <div className="p-6">
                                 <div className="flex justify-between items-start mb-4">
-                                    <div className="flex items-center gap-3 text-red-500">
-                                        <div className="p-2 bg-red-500/10 rounded-lg">
-                                            <AlertTriangle className="w-6 h-6" />
+                                    <div className={`flex items-center gap-3 ${actionType === 'rejected' ? 'text-red-500' : 'text-emerald-500'}`}>
+                                        <div className={`p-2 rounded-lg ${actionType === 'rejected' ? 'bg-red-500/10' : 'bg-emerald-500/10'}`}>
+                                            {actionType === 'rejected' ? <AlertTriangle className="w-6 h-6" /> : <CheckCircle2 className="w-6 h-6" />}
                                         </div>
-                                        <h3 className="text-lg font-bold text-slate-900 dark:text-white">Tolak Request</h3>
+                                        <h3 className="text-lg font-bold text-slate-900 dark:text-white">
+                                            {actionType === 'rejected' ? 'Tolak Request' : 'Publikasi Request'}
+                                        </h3>
                                     </div>
-                                    <button onClick={() => setIsRejectModalOpen(false)} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
+                                    <button onClick={() => setIsActionModalOpen(false)} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
                                         <X className="w-5 h-5" />
                                     </button>
                                 </div>
 
                                 <p className="text-sm text-slate-500 dark:text-slate-400 mb-4">
-                                    Silakan berikan alasan mengapa request ini ditolak. Alasan ini akan terlihat oleh user.
+                                    {actionType === 'rejected'
+                                        ? "Silakan berikan alasan mengapa request ini ditolak. Alasan ini akan terlihat oleh user dan bersifat wajib."
+                                        : "Beri catatan opsional jika kamu ingin menyampaikan sesuatu kepada user (contoh: Link, ucapan terima kasih)."
+                                    }
                                 </p>
 
                                 <textarea
-                                    value={rejectReason}
-                                    onChange={(e) => setRejectReason(e.target.value)}
-                                    placeholder="Contoh: Lagu tidak tersedia di platform streaming..."
-                                    className="w-full h-32 p-3 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-red-500 dark:text-white resize-none mb-4"
+                                    value={actionNote}
+                                    onChange={(e) => setActionNote(e.target.value)}
+                                    placeholder={actionType === 'rejected' ? "Contoh: Lagu tidak tersedia..." : "Tambahkan catatan (opsional)..."}
+                                    className={`w-full h-32 p-3 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 dark:text-white resize-none mb-4 ${actionType === 'rejected' ? 'focus:ring-red-500' : 'focus:ring-emerald-500'
+                                        }`}
                                 />
 
                                 <div className="flex justify-end gap-3">
                                     <button
-                                        onClick={() => setIsRejectModalOpen(false)}
+                                        onClick={() => setIsActionModalOpen(false)}
                                         className="px-4 py-2 text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors"
                                     >
                                         Batal
                                     </button>
                                     <button
-                                        onClick={confirmRejection}
-                                        disabled={!rejectReason.trim() || updatingId}
-                                        className="px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-lg shadow-lg shadow-red-600/20 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                                        onClick={confirmAction}
+                                        disabled={(actionType === 'rejected' && !actionNote.trim()) || updatingId}
+                                        className={`px-4 py-2 text-sm font-medium text-white rounded-lg shadow-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 ${actionType === 'rejected' ? 'bg-red-600 hover:bg-red-700 shadow-red-600/20' : 'bg-emerald-600 hover:bg-emerald-700 shadow-emerald-600/20'
+                                            }`}
                                     >
-                                        {updatingId ? <Loader2 className="w-4 h-4 animate-spin" /> : "Tolak Request"}
+                                        {updatingId ? <Loader2 className="w-4 h-4 animate-spin" /> : (actionType === 'rejected' ? "Tolak Request" : "Publikasikan")}
                                     </button>
                                 </div>
                             </div>

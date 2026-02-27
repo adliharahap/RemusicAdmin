@@ -107,7 +107,7 @@ const MOOD_CATEGORIES = [
             { id: "Morning", desc: "Fresh pagi hari, mood cerah." },
             { id: "Night Drive", desc: "Nyetir malam, city lights." },
             { id: "Rainy Day", desc: "Hujan, sendu, tenang." },
-            { id: "Lonely", desc: "Sepi, reflektif, menenangkan." },
+            { id: "Lonely", desc: "Sepi, reflMinimum 3 moods and ektif, menenangkan." },
         ]
     }
 ];
@@ -118,7 +118,7 @@ export async function POST(req) {
             return NextResponse.json({ error: 'GOOGLE_AI_API_KEY is not set' }, { status: 500 });
         }
 
-        const { type, text } = await req.json();
+        const { type, text, language } = await req.json();
 
         if (!text) {
             return NextResponse.json({ error: 'Text is required' }, { status: 400 });
@@ -144,7 +144,10 @@ The input text may contain standard LRC tags. You MUST parse them to understand 
 - Look for **[ti: Song Title]** to identify the song context.
 - Look for **[al: Album Name]** for era/album context.
 
-If tags are missing, infer from the lyrics alone.
+**LANGUAGE CONTEXT:** The user has selected the language ID "${language || 'unknown'}".
+**STRICT RULES FOR INDONESIAN REGIONAL MUSIC:**
+- If the language is "id" (Pop Indonesia), DO NOT SELECT regional moods like "Jawa", "Batak", "Sunda", "Minang", "Aceh", or "Timur". Select "Pop Indonesia" or "Dangdut" / "Koplo" instead.
+- If the language is a regional one (e.g. "jv" Jawa, "su" Sunda, "bbc" Bataknese, "ace" Acehnese, "ms-id" Minangkabau, "tet" Timur), you MUST SELECT the corresponding regional mood (e.g. "Jawa", "Sunda", "Batak", "Aceh", "Minang", "Timur") and DO NOT SELECT "Pop Indonesia".
 
 Here is the list of available moods and their definitions:
 ${moodListString}
@@ -152,9 +155,9 @@ ${moodListString}
 Instructions:
 1. Analyze the lyrical themes, emotional tone, and implied rhythm of the text provided.
 2. Select strictly from the provided IDs. Do not invent new moods.
-3. Choose the most specific moods possible (e.g., if it's very sad, choose "Sad" or "Melancholic" rather than just "Chill").
+3. Choose the most specific moods possible.
 4. Return ONLY a JSON object with a "moods" key containing an array of strings matching the IDs.
-5. Max 5 moods.
+5. Max 10 moods but you can choose less if you think it's not necessary.
 
 Text to Analyze:
 "${text}"
@@ -171,11 +174,11 @@ Text to Analyze:
         } else if (type === 'translate') {
             prompt = `
 You are an expert song translator and lyricist specializing in translating English songs to Indonesian. 
-Your goal is to provide a translation that is **poetic, emotive, and flows naturally like a movie subtitle**, capturing the deep meaning without being rigid or overly abbreviated.
+Your goal is to provide a translation that is **natural, emotive, and flows like a subtitle**, capturing the deep meaning without being overly formal or excessively poetic/cringey.
 
-**CRITICAL: CONTEXT AWARENESS**
-- Look for **[ar: Artist]** and **[ti: Title]** tags to understand the song's vibe.
-- If no tags exist, infer from the lyrics alone.
+**CRITICAL: EMPTY LINES IN LRC**
+- If an input line is just a timestamp with NO lyrics (e.g. "[09:00.00]"), you MUST output it EXACTLY as is: "[09:00.00]".
+- DO NOT add a "|" or any text to empty lines. This will break the app's lyric parser.
 
 Input Text:
 """
@@ -185,24 +188,78 @@ ${text}
 Instructions:
 1. **Format:** Keep the format EXACTLY as: 
    [timestamp] original lyrics | translated lyrics
+   (Unless the line is empty, then just return the empty timestamp line).
 
 2. **Style & Flow:**
-   - **Full & Natural Sentences:** Use complete, beautiful Indonesian sentences. Do NOT aggressively shorten words (e.g., use "Aku telah" instead of "Ku t'lah", unless absolutely necessary).
-   - **Subtitle Quality:** It should read like a high-quality movie subtitle: clear, touching, and easy to understand instantly.
+   - **Full & Natural Sentences:** Use complete Indonesian sentences. Do NOT use overly abbreviated slang words (e.g., NEVER use "tuk" for "untuk", "kumau" for "aku mau" - spell them out naturally but casually).
+   - **Not Too Poetic:** Do not use overly dramatic or ancient poetic words. Use modern, relatable conversational Indonesian.
 
-3. **Idioms & Slang (THE MOST IMPORTANT PART):**
-   - **Capture the "Attitude":** When translating slang or idioms, do not just translate the meaning. **Translate the VIBE and ATTITUDE.**
-   - **Don't be afraid of length:** If a slang needs a longer phrase to sound cool and accurate in Indonesian, use it.
-   - **Specific Example:** - If you see **"Keep it one hundred"**, do NOT just say "Jujur saja". Say: **"Tunjukkan dirimu yang seratus persen apa adanya"**.
-     - If you see "Pyro", say "Sang penyulut api" (dramatic).
+3. **Pronouns & Tone (CRITICAL):**
+   - For relaxed, romantic, chill, or everyday songs, use **"kamu"** instead of "kau". Use "kau" ONLY if the song is extremely aggressive or deeply dramatic.
+   - Use **"aku"** instead of "ku".
 
-4. **Pronouns & Tone:**
-   - Use "Kau" for poetic/dramatic/conflict lines.
-   - Use "Kamu" for casual/soft lines.
-   - Use "Aku" as the default for "I".
+4. **Idioms & Slang:**
+   - Translate the VIBE and ATTITUDE, not just literal words. 
 
 5. **Output:** Return ONLY the formatted lyrics.
 `;
+        } else if (type === 'artist_bio') {
+            prompt = `
+You are an expert music journalist and Wikipedia editor.
+Write a short, engaging, and professional biography in Indonesian for the musical artist/band: "${text}".
+If the artist is well-known, provide factual background information (genre, origins, notable works).
+If the artist is not well-known, provide a generic but professional-sounding bio based on their name or genre.
+
+Instructions:
+1. Keep it under 3-4 sentences (Short Bio).
+2. Write in Indonesian.
+3. Return ONLY the biography text. Do not include any formatting or introductions.
+`;
+        } else if (type === 'language') {
+            prompt = `
+You are an expert linguist and music language detector.
+Analyze the following lyrics/text and determine its PRIMARY spoken language. 
+Consider tags like [ar: Artist] or [ti: Title] if present, but focus on the lyrics.
+
+Choose EXACTLY ONE ID from this list of supported languages:
+- "id" (Indonesian)
+- "my" (Malaysian)
+- "en" (English)
+- "us" (English US)
+- "es" (Spanish)
+- "fr" (French)
+- "de" (German)
+- "it" (Italian)
+- "ru" (Russian)
+- "jp" (Japanese)
+- "kr" (Korean)
+- "cn" (Mandarin)
+- "ar" (Arabic)
+- "th" (Thai)
+- "vn" (Vietnamese)
+- "ph" (Filipino/Tagalog)
+- "hi" (Hindi)
+- "jv" (Javanese / Jawa)
+- "su" (Sundanese / Sunda)
+- "ms-id" (Minangkabau / Melayu)
+- "bbc" (Bataknese)
+- "ace" (Acehnese)
+- "ban" (Balinese)
+- "tr" (Turkish)
+- "pt" (Portuguese)
+- "other" (If it clearly does not belong to any above)
+
+Return ONLY a JSON object with a "language" key containing the chosen ID string.
+
+Input Text:
+"${text}"
+`;
+            responseSchema = {
+                type: "OBJECT",
+                properties: {
+                    language: { type: "STRING" }
+                }
+            };
         } else {
             return NextResponse.json({ error: 'Invalid type' }, { status: 400 });
         }
@@ -253,6 +310,16 @@ Instructions:
                 console.error("Failed to parse JSON from Gemini:", generatedText);
                 return NextResponse.json({ error: 'Failed to parse AI response' }, { status: 500 });
             }
+        } else if (type === 'language') {
+            try {
+                const cleanText = generatedText.replace(/```json|```/g, '').trim();
+                const jsonResponse = JSON.parse(cleanText);
+                return NextResponse.json({ success: true, language: jsonResponse.language });
+            } catch (e) {
+                return NextResponse.json({ error: 'Failed to parse language from AI' }, { status: 500 });
+            }
+        } else if (type === 'artist_bio') {
+            return NextResponse.json({ success: true, bio: generatedText.trim() });
         } else {
             return NextResponse.json({ success: true, translation: generatedText.trim() });
         }

@@ -1,5 +1,5 @@
-import React, { useRef, useEffect } from 'react';
-import { Search, Plus, X, Check, Clipboard } from 'lucide-react';
+import React, { useRef, useEffect, useState } from 'react';
+import { Search, Plus, X, Check, Clipboard, ChevronLeft, ChevronRight, Sparkles } from 'lucide-react';
 
 export default function ArtistSelector({
     artists, selectedArtist, setSelectedArtist,
@@ -8,9 +8,36 @@ export default function ArtistSelector({
     newArtistName, setNewArtistName,
     newArtistDesc, setNewArtistDesc,
     newArtistPhotoPreview, handleNewArtistPhotoChange,
+    featuredArtists, setFeaturedArtists,
     theme
 }) {
     const dropdownRef = useRef(null);
+    const [tagInput, setTagInput] = useState("");
+    const [isGeneratingBio, setIsGeneratingBio] = useState(false);
+
+    const handleKeyDown = (e) => {
+        if (e.key === 'Enter' || e.key === ',') {
+            e.preventDefault();
+            addArtistTag();
+        }
+    };
+
+    const addArtistTag = () => {
+        const trimmedInput = tagInput.trim();
+        if (trimmedInput && !featuredArtists.includes(trimmedInput)) {
+            setFeaturedArtists([...featuredArtists, trimmedInput]);
+            setTagInput('');
+        }
+    };
+
+    const removeTag = (indexToRemove) => {
+        setFeaturedArtists(featuredArtists.filter((_, index) => index !== indexToRemove));
+    };
+
+    const handleTextareaResize = (e) => {
+        e.target.style.height = 'auto';
+        e.target.style.height = e.target.scrollHeight + 'px';
+    };
 
     // Filter logic
     const filteredArtists = artists.filter(artist =>
@@ -140,13 +167,129 @@ export default function ArtistSelector({
                         </div>
                     </div>
 
-                    <textarea
-                        value={newArtistDesc} onChange={(e) => setNewArtistDesc(e.target.value)}
-                        className={`w-full ${theme.inputBg} border ${theme.border} rounded-lg px-3 py-2 text-sm focus:ring-1 focus:ring-indigo-500 outline-none resize-none h-16`}
-                        placeholder="Short bio..."
-                    />
+                    <div className="space-y-1.5">
+                        <div className="flex items-center justify-between">
+                            <label className="text-xs font-bold opacity-70">Short Bio</label>
+                            <button
+                                type="button"
+                                onClick={async () => {
+                                    if (!newArtistName.trim()) return alert("Please enter an Artist Name first");
+                                    setIsGeneratingBio(true);
+                                    try {
+                                        const res = await fetch('/api/ai-generate', {
+                                            method: 'POST',
+                                            headers: { 'Content-Type': 'application/json' },
+                                            body: JSON.stringify({ type: 'artist_bio', text: newArtistName })
+                                        });
+                                        const data = await res.json();
+                                        if (data.success && data.bio) {
+                                            setNewArtistDesc(data.bio);
+                                            // Trigger resize hack by dispatching event or just let user type
+                                            setTimeout(() => {
+                                                const tx = document.getElementById('artistBioTextarea');
+                                                if (tx) {
+                                                    tx.style.height = 'auto';
+                                                    tx.style.height = tx.scrollHeight + 'px';
+                                                }
+                                            }, 50);
+                                        } else {
+                                            alert("Failed to generate bio: " + (data.error || "Unknown error"));
+                                        }
+                                    } catch (err) {
+                                        console.error(err);
+                                        alert("Error generating bio.");
+                                    } finally {
+                                        setIsGeneratingBio(false);
+                                    }
+                                }}
+                                disabled={isGeneratingBio || !newArtistName.trim()}
+                                className={`text-[10px] font-bold py-1 px-2 rounded-lg flex items-center gap-1 transition-all ${isGeneratingBio ? 'bg-slate-700 text-slate-400 cursor-not-allowed' : 'bg-indigo-600/20 text-indigo-400 hover:bg-indigo-600 hover:text-white border border-indigo-500/20'}`}
+                            >
+                                {isGeneratingBio ? <><Sparkles className="animate-spin" size={12} /> Generating...</> : <><Sparkles size={12} /> AI Generate</>}
+                            </button>
+                        </div>
+                        <textarea
+                            id="artistBioTextarea"
+                            value={newArtistDesc} onChange={(e) => setNewArtistDesc(e.target.value)}
+                            onInput={handleTextareaResize}
+                            className={`w-full ${theme.inputBg} border ${theme.border} rounded-lg px-3 py-2 text-sm focus:ring-1 focus:ring-indigo-500 outline-none resize-none min-h-[64px] overflow-hidden`}
+                            placeholder="Short bio..."
+                            rows={1}
+                        />
+                    </div>
                 </div>
             )}
+
+            {/* Featured Artists Input */}
+            <div className="mt-6 pt-6 border-t border-slate-700/50 space-y-2">
+                <label className="text-xs font-bold uppercase tracking-wider opacity-70 flex items-center gap-1">
+                    Featured Artists <span className="text-[10px] font-normal lowercase opacity-50 ml-1">(Optional - Type & Enter)</span>
+                </label>
+
+                <div className="flex gap-2">
+                    <input
+                        type="text"
+                        value={tagInput}
+                        onChange={(e) => setTagInput(e.target.value)}
+                        onKeyDown={handleKeyDown}
+                        placeholder="E.g. Cardi B, DJ Khaled (Press Enter)"
+                        className={`flex-1 ${theme.inputBg} border ${theme.border} rounded-xl px-4 py-2.5 outline-none transition-all text-sm`}
+                    />
+                    <button
+                        type="button"
+                        onClick={addArtistTag}
+                        className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-xl text-sm font-bold transition-colors"
+                    >
+                        Add
+                    </button>
+                </div>
+
+                {/* Chips */}
+                <div className="flex flex-wrap gap-2 mt-2">
+                    {featuredArtists && featuredArtists.map((artist, index) => (
+                        <div key={index} className="bg-indigo-500/10 text-indigo-400 pl-3 pr-1 py-1 rounded-full text-xs font-bold flex items-center gap-1 border border-indigo-500/20 transition-all">
+                            <span className="mr-1">{artist}</span>
+
+                            <div className="flex items-center gap-0.5 ml-1 opacity-70 hover:opacity-100">
+                                {index > 0 && (
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            const newArr = [...featuredArtists];
+                                            [newArr[index - 1], newArr[index]] = [newArr[index], newArr[index - 1]];
+                                            setFeaturedArtists(newArr);
+                                        }}
+                                        className="p-1 hover:text-white hover:bg-indigo-500/30 rounded-full transition-colors"
+                                    >
+                                        <ChevronLeft size={12} strokeWidth={3} />
+                                    </button>
+                                )}
+                                {index < featuredArtists.length - 1 && (
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            const newArr = [...featuredArtists];
+                                            [newArr[index + 1], newArr[index]] = [newArr[index], newArr[index + 1]];
+                                            setFeaturedArtists(newArr);
+                                        }}
+                                        className="p-1 hover:text-white hover:bg-indigo-500/30 rounded-full transition-colors"
+                                    >
+                                        <ChevronRight size={12} strokeWidth={3} />
+                                    </button>
+                                )}
+                            </div>
+
+                            <button
+                                type="button"
+                                onClick={() => removeTag(index)}
+                                className="p-1 ml-1 hover:text-red-400 hover:bg-red-500/20 rounded-full transition-colors"
+                            >
+                                <X size={12} strokeWidth={3} />
+                            </button>
+                        </div>
+                    ))}
+                </div>
+            </div>
         </div>
     );
 }

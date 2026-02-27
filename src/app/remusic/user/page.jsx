@@ -5,6 +5,8 @@ import { formatDate } from '../../../../utils/formatDateAndNumber';
 import { supabase } from '../../../../lib/supabaseClient';
 import { useSelector } from 'react-redux';
 import ChangeRoleModal from './components/changeRoleModal';
+import BanUserModal from './components/banUserModal';
+import { ShieldAlert } from 'lucide-react';
 
 export default function UserPage() {
   const [users, setUsers] = useState([]);
@@ -15,6 +17,9 @@ export default function UserPage() {
   // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState(null);
+
+  const [isBanModalOpen, setIsBanModalOpen] = useState(false);
+  const [selectedBanUser, setSelectedBanUser] = useState(null);
 
   // Get current user from Redux
   const { user: currentUser } = useSelector((state) => state.auth);
@@ -84,6 +89,16 @@ export default function UserPage() {
     setIsModalOpen(true);
   };
 
+  const handleBanClick = (targetUser) => {
+    const isOwner = currentUser?.role === 'owner';
+    if (!isOwner) {
+      alert("Anda bukan owner. Hanya owner yang dapat mengelola status blokir (ban) pengguna.");
+      return;
+    }
+    setSelectedBanUser(targetUser);
+    setIsBanModalOpen(true);
+  };
+
   const UserTable = ({ data, title, emptyMessage }) => (
     <div className="space-y-4">
       <h3 className="text-lg font-semibold text-slate-900 dark:text-white border-l-4 border-indigo-500 pl-3">
@@ -119,10 +134,17 @@ export default function UserPage() {
                         <img
                           src={user.photo_url || `https://ui-avatars.com/api/?name=${user.display_name}&background=random`}
                           alt={user.display_name}
-                          className="w-10 h-10 rounded-full object-cover bg-slate-200 dark:bg-slate-700"
+                          className="w-10 h-10 rounded-full object-cover bg-slate-200 dark:bg-slate-700 shrink-0"
                         />
-                        <div>
-                          <div className="font-medium text-slate-900 dark:text-white">{user.display_name || "Tanpa Nama"}</div>
+                        <div className="min-w-0">
+                          <div className="font-medium text-slate-900 dark:text-white flex items-center gap-2">
+                            <span className="truncate">{user.display_name || "Tanpa Nama"}</span>
+                            {user.banned_until && new Date(user.banned_until) > new Date() && (
+                              <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-400 border border-red-200 dark:border-red-500/30">
+                                Banned
+                              </span>
+                            )}
+                          </div>
                         </div>
                       </div>
                     </td>
@@ -136,17 +158,29 @@ export default function UserPage() {
                       {formatDate(user.created_at)}
                     </td>
                     <td className="py-4 px-6 whitespace-nowrap text-right text-sm font-medium">
-                      <div className="flex items-center justify-end gap-4 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <div className="flex items-center justify-end gap-3 transition-opacity">
                         <button
                           onClick={() => handleEditClick(user)}
-                          className="text-indigo-600 dark:text-indigo-400 hover:text-indigo-500 dark:hover:text-indigo-300 transition-colors"
+                          className="p-1.5 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-500/10 rounded-lg transition-colors"
                           title="Ubah Role"
                         >
                           <EditIcon className="w-5 h-5" />
                         </button>
+                        {currentUser?.role === 'owner' && user.role !== 'owner' && (
+                          <button
+                            onClick={() => handleBanClick(user)}
+                            className={`p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors ${user.banned_until && new Date(user.banned_until) > new Date()
+                              ? 'text-red-600 dark:text-red-400'
+                              : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-300'
+                              }`}
+                            title={user.banned_until && new Date(user.banned_until) > new Date() ? "Manage Ban (Currently Banned)" : "Ban User"}
+                          >
+                            <ShieldAlert className="w-5 h-5" />
+                          </button>
+                        )}
                         <button
                           onClick={() => alert("Fitur hapus belum tersedia.")}
-                          className="text-red-600 dark:text-red-500 hover:text-red-500 dark:hover:text-red-400 transition-colors"
+                          className="p-1.5 text-red-600 dark:text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 rounded-lg transition-colors"
                           title="Hapus User"
                         >
                           <DeleteIcon className="w-5 h-5" />
@@ -221,6 +255,17 @@ export default function UserPage() {
         onClose={() => setIsModalOpen(false)}
         user={selectedUser}
         onSuccess={() => fetchUsers()}
+      />
+
+      {/* Modal Ban User (Owner Only) */}
+      <BanUserModal
+        isOpen={isBanModalOpen}
+        onClose={() => setIsBanModalOpen(false)}
+        user={selectedBanUser}
+        onSuccess={() => {
+          fetchUsers();
+          // Optional: You could fetch/send an FCM push ref here indicating they got banned
+        }}
       />
     </div>
   );

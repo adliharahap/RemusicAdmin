@@ -22,6 +22,10 @@ const geistMono = Geist_Mono({
 export const metadata = {
   title: "Remusic Admin Control",
   description: "Admin control panel for Remusic music streaming service",
+  icons: {
+    icon: "/1770367047686.jpg",
+    apple: "/1770367047686.jpg",
+  },
 };
 
 export default function RootLayout({ children }) {

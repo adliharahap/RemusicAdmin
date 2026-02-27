@@ -1,16 +1,16 @@
 "use client";
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { X, Save, Loader2, Sun, Moon, Upload } from 'lucide-react';
 import { supabase } from '../../../../../lib/supabaseClient';
 import { useTheme } from 'next-themes';
 
 // Import Komponen Modular
-import { uploadToGithub, parseLrc, getAudioDuration, formatTimestamp } from './_utils/uploadHelpers';
+import { uploadToGithub, getAudioDuration } from './_utils/uploadHelpers';
 import ArtistSelector from './_components/ArtistSelector';
 import FileUploadSection from './_components/FileUploadSection';
 import MetadataForm from './_components/MetadataForm';
-import VisualSyncEditor from './_components/VisualSyncEditor';
+import AudioPreviewPlayer from './_components/AudioPreviewPlayer';
 import ImageCropperModal from './_components/ImageCropperModal';
 import MetadataLoadingModal from './_components/MetadataLoadingModal';
 import UploadStatusModal from './_components/UploadStatusModal';
@@ -65,17 +65,72 @@ export default function UploadSongPage() {
     const [audioPreviewUrl, setAudioPreviewUrl] = useState(null);
     const [coverPreviewUrl, setCoverPreviewUrl] = useState(null);
 
-    // --- PLAYER STATES ---
-    const [isPlaying, setIsPlaying] = useState(false);
-    const [currentTime, setCurrentTime] = useState(0);
-    const [parsedLyrics, setParsedLyrics] = useState([]);
-    const [activeLyricIndex, setActiveLyricIndex] = useState(-1);
-    const [syncIndex, setSyncIndex] = useState(0);
+    // --- PLAYER STATES (REMOVED SYNC) ---
+    // isPlaying, currentTime, dst. dihapus karena VisualSyncEditor tidak dipakai lagi
 
     // --- CROPPER STATES ---
     const [isCropperOpen, setIsCropperOpen] = useState(false);
     const [croppingImage, setCroppingImage] = useState(null);
     const [croppingType, setCroppingType] = useState(null); // 'cover' | 'artist'
+
+    // --- DIRTY STATE REF ---
+    const isDirtyRef = useRef(false);
+    const isCompletedRef = useRef(false);
+
+    useEffect(() => {
+        isCompletedRef.current = isUploadCompleted;
+    }, [isUploadCompleted]);
+
+    useEffect(() => {
+        isDirtyRef.current = !!(title || audioFile || coverFile || telegramFileId || newArtistName || isCreatingArtist || lyricsRaw || featuredArtists.length > 0);
+    }, [title, audioFile, coverFile, telegramFileId, newArtistName, isCreatingArtist, lyricsRaw, featuredArtists]);
+
+    // --- PREVENT ACCIDENTAL EXIT ---
+    useEffect(() => {
+        const handleBeforeUnload = (e) => {
+            if (isDirtyRef.current && !isCompletedRef.current) {
+                e.preventDefault();
+                e.returnValue = '';
+            }
+        };
+
+        window.addEventListener('beforeunload', handleBeforeUnload);
+
+        // Pushing state to trap Android back button / Browser back button
+        window.history.pushState(null, '', window.location.href);
+        const handlePopState = (e) => {
+            if (isDirtyRef.current && !isCompletedRef.current) {
+                if (window.confirm("Apakah anda yakin ingin keluar? Data yang sudah diisi akan hilang.")) {
+                    isDirtyRef.current = false;
+                    window.history.back();
+                } else {
+                    window.history.pushState(null, '', window.location.href);
+                }
+            } else {
+                window.history.back();
+            }
+        };
+
+        window.addEventListener('popstate', handlePopState);
+
+        return () => {
+            window.removeEventListener('beforeunload', handleBeforeUnload);
+            window.removeEventListener('popstate', handlePopState);
+        };
+    }, []); // Run ONLY once on mount
+
+    const handleBackClick = () => {
+        if (isDirtyRef.current && !isCompletedRef.current) {
+            if (window.confirm("Apakah anda yakin ingin keluar? Data yang sudah diisi akan hilang.")) {
+                isDirtyRef.current = false;
+                // Pop the dummy state then go back
+                window.history.back();
+            }
+        } else {
+            // Pop the dummy state then go back
+            window.history.back();
+        }
+    };
 
     // --- EFFECTS: FETCH ARTISTS ---
     useEffect(() => {
@@ -118,7 +173,16 @@ export default function UploadSongPage() {
                 if (data.success) {
                     console.log("✅ Metadata Extracted:", data);
                     if (data.title) setTitle(data.title);
-                    if (data.artist) {
+                    if (data.artists && data.artists.length > 0) {
+                        console.log("Found Array of Artists:", data.artists);
+                        setArtistSearchTerm(data.artists[0]);
+                        setNewArtistName(data.artists[0]);
+                        if (data.artists.length > 1) {
+                            console.log("Setting Featured Artists:", data.artists.slice(1));
+                            setFeaturedArtists(data.artists.slice(1));
+                        }
+                    } else if (data.artist) {
+                        console.log("Found Single Artist String:", data.artist);
                         setArtistSearchTerm(data.artist);
                         setNewArtistName(data.artist);
                     }
@@ -143,6 +207,19 @@ export default function UploadSongPage() {
                         } catch (e) {
                             console.error("Error processing cover image:", e);
                         }
+                    }
+
+                    // Fetch stream URL for preview
+                    try {
+                        const streamRes = await fetch(`/api/get-stream-url?song_id=preview_${telegramFileId}&file_id=${telegramFileId}`);
+                        if (streamRes.ok) {
+                            const streamData = await streamRes.json();
+                            if (streamData.success && streamData.url) {
+                                setAudioPreviewUrl(streamData.url);
+                            }
+                        }
+                    } catch (e) {
+                        console.error("Error fetching preview stream:", e);
                     }
                 } else {
                     console.warn("❌ Failed to extract metadata:", data.error);
@@ -195,7 +272,16 @@ export default function UploadSongPage() {
             if (data.success) {
                 console.log("Metadata extracted:", data);
                 if (data.title) setTitle(data.title);
-                if (data.artist) {
+                if (data.artists && data.artists.length > 0) {
+                    console.log("Found Array of Artists:", data.artists);
+                    setArtistSearchTerm(data.artists[0]);
+                    setNewArtistName(data.artists[0]);
+                    if (data.artists.length > 1) {
+                        console.log("Setting Featured Artists:", data.artists.slice(1));
+                        setFeaturedArtists(data.artists.slice(1));
+                    }
+                } else if (data.artist) {
+                    console.log("Found Single Artist String:", data.artist);
                     setArtistSearchTerm(data.artist);
                     // Also pre-fill new artist name just in case
                     setNewArtistName(data.artist);
@@ -304,23 +390,7 @@ export default function UploadSongPage() {
 
     const handleLyricsChange = (e) => {
         setLyricsRaw(e.target.value);
-        setParsedLyrics(parseLrc(e.target.value));
-        setSyncIndex(0);
     };
-
-    const handleTapSync = () => {
-        const updated = [...parsedLyrics];
-        if (!updated[syncIndex]) return;
-
-        updated[syncIndex] = { ...updated[syncIndex], time: currentTime, original: `${formatTimestamp(currentTime)} ${updated[syncIndex].text}` };
-        setParsedLyrics(updated);
-        setLyricsRaw(updated.map(l => l.original).join('\n'));
-        if (syncIndex < parsedLyrics.length - 1) setSyncIndex(p => p + 1);
-    };
-
-    const skipTime = (audioRef, seconds) => {
-        if (audioRef.current) audioRef.current.currentTime = Math.max(0, audioRef.current.currentTime - seconds);
-    }
 
     // --- MAIN UPLOAD LOGIC (REFACTORED) ---
     const handleUpload = async (e) => {
@@ -532,7 +602,7 @@ export default function UploadSongPage() {
             {/* HEADER */}
             <div className={`flex justify-between items-center px-4 md:px-8 py-4 border-b ${theme.border} sticky top-0 z-50 ${theme.bg}/95 backdrop-blur-sm`}>
                 <div className="flex items-center gap-4">
-                    <button onClick={() => router.back()} className={`p-2 rounded-full hover:bg-white/10 ${theme.textMuted}`}><X size={24} /></button>
+                    <button onClick={handleBackClick} className={`p-2 rounded-full hover:bg-white/10 ${theme.textMuted}`}><X size={24} /></button>
                     <div className="flex items-center gap-3">
                         <div className={`p-2 rounded-xl ${isDarkMode ? 'bg-indigo-500/10' : 'bg-blue-100'}`}><Upload className={theme.iconColor} size={20} /></div>
                         <h1 className="text-xl font-bold tracking-tight hidden md:block">Upload New Song</h1>
@@ -546,10 +616,24 @@ export default function UploadSongPage() {
                 </div>
             </div>
 
-            <div className="flex-1 flex flex-col lg:flex-row overflow-hidden h-[calc(100vh-73px)]">
-                {/* LEFT COLUMN: Inputs */}
-                <div className={`w-full lg:w-[35%] flex flex-col border-b lg:border-b-0 lg:border-r ${theme.border} ${theme.scrollHide} overflow-y-auto`}>
-                    <div className="p-6 space-y-8">
+            <div className={`flex-1 overflow-y-auto ${theme.scrollHide} p-4 md:p-6 lg:p-8`}>
+                <div className="max-w-[1400px] w-full mx-auto grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-8 relative">
+
+                    {/* LEFT COLUMN: Upload & Artist (Bigger width on lg, sticky maybe) */}
+                    <div className="lg:col-span-5 xl:col-span-4 space-y-6 lg:sticky lg:top-8 lg:pb-8">
+
+                        <AudioPreviewPlayer
+                            theme={theme}
+                            audioFile={audioFile}
+                            audioPreviewUrl={audioPreviewUrl}
+                            telegramFileId={telegramFileId}
+                            title={title}
+                            selectedArtist={selectedArtist}
+                            newArtistName={newArtistName}
+                            isCreatingArtist={isCreatingArtist}
+                            coverPreviewUrl={coverPreviewUrl}
+                        />
+
                         <FileUploadSection
                             theme={theme}
                             handleAudioChange={handleAudioChange} telegramFileId={telegramFileId} setTelegramFileId={setTelegramFileId}
@@ -567,8 +651,12 @@ export default function UploadSongPage() {
                             newArtistName={newArtistName} setNewArtistName={setNewArtistName}
                             newArtistDesc={newArtistDesc} setNewArtistDesc={setNewArtistDesc}
                             newArtistPhotoPreview={newArtistPhotoPreview} handleNewArtistPhotoChange={handleNewArtistPhotoChange}
+                            featuredArtists={featuredArtists} setFeaturedArtists={setFeaturedArtists}
                         />
+                    </div>
 
+                    {/* RIGHT COLUMN: Metadata Form */}
+                    <div className="lg:col-span-7 xl:col-span-8 bg-black/5 dark:bg-white/5 p-6 md:p-8 rounded-3xl border border-black/10 dark:border-white/10 shadow-sm">
                         <MetadataForm
                             theme={theme}
                             title={title} setTitle={setTitle} language={language} setLanguage={setLanguage}
@@ -577,19 +665,8 @@ export default function UploadSongPage() {
                             featuredArtists={featuredArtists} setFeaturedArtists={setFeaturedArtists}
                         />
                     </div>
-                </div>
 
-                {/* RIGHT COLUMN: Visual Editor */}
-                <VisualSyncEditor
-                    theme={theme} isDarkMode={isDarkMode}
-                    title={title} selectedArtist={selectedArtist} newArtistName={newArtistName} isCreatingArtist={isCreatingArtist}
-                    coverPreviewUrl={coverPreviewUrl} audioPreviewUrl={audioPreviewUrl}
-                    isPlaying={isPlaying} setIsPlaying={setIsPlaying}
-                    currentTime={currentTime} setCurrentTime={setCurrentTime}
-                    parsedLyrics={parsedLyrics} syncIndex={syncIndex} setSyncIndex={setSyncIndex}
-                    activeLyricIndex={activeLyricIndex} setActiveLyricIndex={setActiveLyricIndex}
-                    handleTapSync={handleTapSync} skipTime={skipTime}
-                />
+                </div>
             </div>
 
             {/* Mobile Save Button */}

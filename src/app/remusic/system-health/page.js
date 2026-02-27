@@ -9,6 +9,10 @@ export default function SystemHealthPage() {
     const [botStatus, setBotStatus] = useState(null);
     const [loading, setLoading] = useState(true);
     
+    // Webhook Manager State
+    const [webhookInput, setWebhookInput] = useState("");
+    const [isSettingWebhook, setIsSettingWebhook] = useState(false);
+    
     // Queue State
     const [processingQueue, setProcessingQueue] = useState([]);
     const [isProcessing, setIsProcessing] = useState(false);
@@ -103,6 +107,27 @@ export default function SystemHealthPage() {
         setIsProcessing(false);
         // Refresh stats after done
         fetchData();
+    };
+
+    // --- WEBHOOK MANAGER ---
+    const handleSetWebhook = async (url) => {
+        if (!url) return alert("URL tidak boleh kosong!");
+        if (!url.startsWith("https://")) return alert("URL harus menggunakan https://");
+
+        setIsSettingWebhook(true);
+        try {
+            const res = await axios.post('/api/system/telegram-webhook', { url });
+            if (res.data.success) {
+                alert(`Berhasil mengubah Webhook URL ke: \n${url}`);
+                setWebhookInput("");
+                fetchData(); // refresh status
+            }
+        } catch (error) {
+            console.error("Failed to set webhook:", error);
+            alert("Gagal mengubah webhook: " + (error.response?.data?.error || error.message));
+        } finally {
+            setIsSettingWebhook(false);
+        }
     };
 
     return (
@@ -203,6 +228,43 @@ export default function SystemHealthPage() {
                                         </span>
                                     </div>
                                 )}
+                                {botStatus.result?.url && (
+                                     <div className="p-3 rounded-lg bg-slate-50 dark:bg-white/5 break-all">
+                                         <span className="text-xs text-slate-500 dark:text-slate-400 block mb-1">Active Webhook URL</span>
+                                         <a href={botStatus.result.url} target="_blank" rel="noopener noreferrer" className="text-sm font-medium text-indigo-600 dark:text-indigo-400 hover:underline">
+                                             {botStatus.result.url}
+                                         </a>
+                                     </div>
+                                )}
+                                
+                                {/* Webhook Manager Form */}
+                                <div className="pt-4 border-t border-slate-200 dark:border-white/5 space-y-3 mt-4">
+                                     <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Ganti URL Webhook</span>
+                                     <div className="flex gap-2">
+                                         <input 
+                                            type="text" 
+                                            value={webhookInput}
+                                            onChange={(e) => setWebhookInput(e.target.value)}
+                                            placeholder="https://ngrok-url/api/telegram/webhook" 
+                                            className="w-full text-sm px-3 py-2 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-slate-700/50 rounded-lg focus:outline-none focus:ring-2 ring-indigo-500/50"
+                                         />
+                                         <button 
+                                            onClick={() => handleSetWebhook(webhookInput)}
+                                            disabled={isSettingWebhook || !webhookInput}
+                                            className="px-3 py-2 bg-slate-800 dark:bg-slate-700 hover:bg-slate-700 text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-50 shrink-0 flex items-center gap-2"
+                                         >
+                                             {isSettingWebhook ? <Loader2 className="w-4 h-4 animate-spin" /> : "Set Local"}
+                                         </button>
+                                     </div>
+                                     <button 
+                                        type="button"
+                                        onClick={() => handleSetWebhook('https://remusic-admin.vercel.app/api/telegram/webhook')}
+                                        disabled={isSettingWebhook}
+                                        className="w-full py-2 px-3 border-2 border-indigo-500/20 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-500/10 rounded-lg text-sm font-semibold transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
+                                     >
+                                         Set URL Production (Vercel)
+                                     </button>
+                                </div>
                             </div>
                         ) : (
                             <div className="animate-pulse space-y-3">

@@ -4,9 +4,41 @@ import React, { useState, useEffect } from 'react';
 import { Send, Bell, Search, User, Users, Info, AlertTriangle, CheckCircle, X } from 'lucide-react';
 import { supabase } from '../../../../lib/supabaseClient';
 
+const NOTIFICATION_TEMPLATES = [
+    {
+        label: "🛠️ Maintenance Server",
+        title: "Maintenance Server",
+        message: "Halo! Server saat ini sedang dalam masa perbaikan rutin untuk meningkatkan performa. Aplikasi mungkin akan tidak stabil selama beberapa saat. Terima kasih atas pengertiannya.",
+        type: "warning",
+        image_url: "https://images.unsplash.com/photo-1555664424-778a1e5e1b48?q=80&w=800&auto=format&fit=crop"
+    },
+    {
+        label: "🚀 Update Fitur",
+        title: "Update Fitur Baru!",
+        message: "Halo! Kami baru saja merilis fitur-fitur baru dan perbaikan bug. Silakan muat ulang (refresh) atau update aplikasi Anda untuk menikmati pengalaman yang lebih baik!",
+        type: "info",
+        image_url: "https://images.unsplash.com/photo-1518770660439-4636190af475?q=80&w=800&auto=format&fit=crop"
+    },
+    {
+        label: "ℹ️ Info Sistem",
+        title: "Pemberitahuan Sistem",
+        message: "Kami menemukan sedikit gangguan pada beberapa layanan, tim kami sedang menanganinya. Mohon maaf atas ketidaknyamanan ini.",
+        type: "warning",
+        image_url: ""
+    },
+    {
+        label: "🎉 Event Spesial",
+        title: "Event Spesial Baru!",
+        message: "Dengarkan playlist khusus yang baru saja kami rilis untuk menemani harimu. Jangan sampai ketinggalan!",
+        type: "success",
+        image_url: "https://images.unsplash.com/photo-1470225620780-dba8ba36b745?q=80&w=800&auto=format&fit=crop"
+    }
+];
+
 export default function SendNotificationPage() {
     const [title, setTitle] = useState("");
     const [message, setMessage] = useState("");
+    const [imageUrl, setImageUrl] = useState("");
     const [type, setType] = useState("info"); // info, warning, success
     const [target, setTarget] = useState("broadcast"); // broadcast, specific
 
@@ -17,6 +49,13 @@ export default function SendNotificationPage() {
     const [isSearching, setIsSearching] = useState(false);
 
     const [loading, setLoading] = useState(false);
+
+    const applyTemplate = (template) => {
+        setTitle(template.title);
+        setMessage(template.message);
+        setType(template.type);
+        setImageUrl(template.image_url || "");
+    };
 
     // Search Users Effect
     useEffect(() => {
@@ -67,6 +106,7 @@ export default function SendNotificationPage() {
             const payload = {
                 title,
                 message,
+                image_url: imageUrl || null,
                 type,
                 is_read: false,
                 created_at: new Date().toISOString(),
@@ -90,6 +130,7 @@ export default function SendNotificationPage() {
             // Reset Form
             setTitle("");
             setMessage("");
+            setImageUrl("");
             setType("info");
             setTarget("broadcast");
             setSelectedUser(null);
@@ -213,6 +254,34 @@ export default function SendNotificationPage() {
                         </div>
                     )}
 
+                    {/* Templates (Only if Broadcast) */}
+                    {target === 'broadcast' && (
+                        <div className="space-y-3 animate-in fade-in slide-in-from-top-2">
+                            <label className="text-sm font-bold uppercase text-slate-500 dark:text-slate-400 tracking-wider flex items-center gap-2">
+                                Template Cepat <span className="text-xs font-normal text-slate-400 normal-case">(Opsional)</span>
+                            </label>
+                            <div className="flex flex-wrap gap-2">
+                                {NOTIFICATION_TEMPLATES.map((tmpl, idx) => (
+                                    <button
+                                        key={idx}
+                                        type="button"
+                                        onClick={() => applyTemplate(tmpl)}
+                                        className="px-4 py-2 text-sm font-medium bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl hover:border-indigo-500 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors"
+                                    >
+                                        {tmpl.label}
+                                    </button>
+                                ))}
+                                <button
+                                    type="button"
+                                    onClick={() => applyTemplate({ title: "", message: "", type: "info", image_url: "" })}
+                                    className="px-4 py-2 text-sm font-medium bg-slate-100 dark:bg-slate-800/50 border border-transparent rounded-xl hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-400 transition-colors"
+                                >
+                                    Reset
+                                </button>
+                            </div>
+                        </div>
+                    )}
+
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         {/* Title */}
                         <div className="space-y-2">
@@ -236,10 +305,10 @@ export default function SendNotificationPage() {
                                         type="button"
                                         onClick={() => setType(t)}
                                         className={`flex-1 py-3 rounded-xl border transition-all capitalize flex items-center justify-center gap-2 ${type === t
-                                                ? t === 'info' ? 'bg-blue-500 text-white border-blue-500'
-                                                    : t === 'warning' ? 'bg-amber-500 text-white border-amber-500'
-                                                        : 'bg-emerald-500 text-white border-emerald-500'
-                                                : 'bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700'
+                                            ? t === 'info' ? 'bg-blue-500 text-white border-blue-500'
+                                                : t === 'warning' ? 'bg-amber-500 text-white border-amber-500'
+                                                    : 'bg-emerald-500 text-white border-emerald-500'
+                                            : 'bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700'
                                             }`}
                                     >
                                         {t === 'info' && <Info size={18} />}
@@ -261,6 +330,47 @@ export default function SendNotificationPage() {
                             placeholder="Tulis pesan notifikasi di sini..."
                             className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition h-32 resize-none"
                         />
+                    </div>
+
+                    {/* Image URL */}
+                    <div className="space-y-4">
+                        <div className="space-y-2">
+                            <label className="text-sm font-bold uppercase text-slate-500 dark:text-slate-400 tracking-wider flex items-center gap-2">
+                                Link Gambar <span className="text-xs font-normal text-slate-400 normal-case">(Opsional)</span>
+                            </label>
+                            <input
+                                type="url"
+                                value={imageUrl}
+                                onChange={(e) => setImageUrl(e.target.value)}
+                                placeholder="https://example.com/image.jpg"
+                                className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition"
+                            />
+                        </div>
+
+                        {/* Image Preview */}
+                        {imageUrl && (
+                            <div className="space-y-2 animate-in fade-in slide-in-from-top-2">
+                                <label className="text-sm font-bold uppercase text-slate-500 dark:text-slate-400 tracking-wider">Preview Gambar</label>
+                                <div className="p-2 border border-slate-200 dark:border-slate-700 rounded-xl bg-slate-50 dark:bg-slate-800/50 inline-flex justify-center overflow-hidden max-w-full">
+                                    <img
+                                        src={imageUrl}
+                                        alt="Preview"
+                                        className="max-h-48 rounded-lg object-contain"
+                                        onError={(e) => {
+                                            e.target.style.display = 'none';
+                                            e.target.insertAdjacentHTML('afterend', '<p class="text-sm text-red-500 mt-2">Gambar tidak dapat dimuat. Pastikan link valid.</p>');
+                                        }}
+                                        onLoad={(e) => {
+                                            e.target.style.display = 'block';
+                                            const errorMsg = e.target.nextElementSibling;
+                                            if (errorMsg && errorMsg.tagName === 'P') {
+                                                errorMsg.remove();
+                                            }
+                                        }}
+                                    />
+                                </div>
+                            </div>
+                        )}
                     </div>
 
                     {/* Submit Button */}

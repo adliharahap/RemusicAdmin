@@ -67,31 +67,6 @@ export const uploadToGithub = async (file, id, type) => {
 };
 
 // --- UTILS LAINNYA (TETAP SAMA) ---
-
-export const parseLrc = (lrcString) => {
-    if (!lrcString) return [];
-    const lines = lrcString.split('\n');
-    const regex = /^\[(\d{2}):(\d{2})\.(\d{2,3})\](.*)/;
-    return lines.map((line, index) => {
-        const match = line.match(regex);
-        if (match) {
-            const minutes = parseInt(match[1]);
-            const seconds = parseInt(match[2]);
-            const milliseconds = parseInt(match[3]);
-            const time = minutes * 60 + seconds + milliseconds / 1000;
-            return { time, text: match[4].trim(), original: line, index };
-        }
-        return { time: -1, text: line, original: line, index };
-    }).filter(l => l.time !== -1);
-};
-
-export const formatTimestamp = (currentTime) => {
-    const minutes = Math.floor(currentTime / 60);
-    const seconds = Math.floor(currentTime % 60);
-    const ms = Math.floor((currentTime % 1) * 100);
-    return `[${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}.${String(ms).padStart(2, '0')}]`;
-};
-
 export const getAudioDuration = (file) => {
     return new Promise((resolve) => {
         if (!file) { resolve(0); return; }
