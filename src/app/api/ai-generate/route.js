@@ -102,6 +102,15 @@ const MOOD_CATEGORIES = [
         ]
     },
     {
+        name: "Spiritual & Religious",
+        options: [
+            { id: "Religius", desc: "Lagu bertema ketuhanan, spiritualitas umum." },
+            { id: "Sholawat & Nasyid", desc: "Khusus Islami, pujian Nabi, Nasyid." },
+            { id: "Christian / Gospel", desc: "Khusus Kristiani, gereja, gospel." },
+            { id: "Mantra & Chant", desc: "Mantra suci, chanting, meditasi." },
+        ]
+    },
+    {
         name: "Daily Mood",
         options: [
             { id: "Morning", desc: "Fresh pagi hari, mood cerah." },
@@ -118,11 +127,27 @@ export async function POST(req) {
             return NextResponse.json({ error: 'GOOGLE_AI_API_KEY is not set' }, { status: 500 });
         }
 
-        const { type, text, language } = await req.json();
+        const { type, text, language, model } = await req.json();
 
         if (!text) {
             return NextResponse.json({ error: 'Text is required' }, { status: 400 });
         }
+
+        // --- SUPPORTED MODELS ---
+        const SUPPORTED_MODELS = [
+            'gemini-2.5-flash',
+            'gemini-2.5-pro',
+            'gemini-2.0-flash',
+            'gemini-2.0-flash-lite',
+            'gemini-2.0-flash-exp',
+            'gemini-1.5-flash',
+            'gemini-1.5-flash-8b',
+            'gemini-3.0-flash',
+            'gemini-2.5-flash-lite',
+            'gemini-3.1-pro',
+            'gemini-3.1-flash-lite',
+        ];
+        const selectedModel = SUPPORTED_MODELS.includes(model) ? model : 'gemini-2.0-flash';
 
         let prompt = "";
         let responseSchema = null;
@@ -265,7 +290,7 @@ Input Text:
         }
 
         const generateConfig = {
-            model: "gemini-2.5-flash",
+            model: selectedModel,
             contents: [
                 {
                     role: "user",
@@ -287,10 +312,8 @@ Input Text:
         try {
             response = await ai.models.generateContent(generateConfig);
         } catch (e) {
-            // Fallback if 2.5-flash fails (e.g. 503 Overloaded or 404 Not Found)
-            console.warn("Primary model failed, retrying with gemini-1.5-flash:", e.message);
-            generateConfig.model = "gemini-1.5-flash";
-            response = await ai.models.generateContent(generateConfig);
+            console.error("AI Generation failed:", e.message);
+            throw e;
         }
         
         // Fix: Access .text property directly based on user example/SDK version

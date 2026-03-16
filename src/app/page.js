@@ -12,7 +12,9 @@ import {
   Command,
   Loader2
 } from "lucide-react";
-import { useSelector } from "react-redux";
+import { useSelector, useDispatch } from "react-redux";
+import { clearUser } from "../../store/authSlice";
+import { supabase } from "../../lib/supabaseClient";
 import Link from "next/link";
 
 // --- Mock Loading Component ---
@@ -101,6 +103,16 @@ const DashboardCard = ({
 
 export default function Home() {
   const { user, loading } = useSelector((state) => state.auth);
+  const dispatch = useDispatch();
+
+  const handleLogout = async () => {
+    try {
+      await supabase.auth.signOut();
+      dispatch(clearUser());
+    } catch (error) {
+      console.error("Error logging out:", error);
+    }
+  };
 
   if (loading) {
     return <LoadingScreen />;
@@ -168,6 +180,7 @@ export default function Home() {
               </div>
             </div>
             <button 
+              onClick={handleLogout}
               className="p-2 rounded-full bg-slate-800 hover:bg-red-500/20 hover:text-red-400 text-slate-400 transition-all duration-200 group"
               title="Logout"
             >

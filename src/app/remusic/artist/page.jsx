@@ -7,6 +7,33 @@ import AddArtistModal from './_components/addArtistModal';
 import EditArtistModal from './_components/EditArtistModal';
 import { useSearchParams, usePathname, useRouter } from 'next/navigation';
 
+// --- Helper Functions ---
+const urlToGithubPath = (url) => {
+    if (!url) return null;
+    try {
+        const match = url.match(/\/gh\/[^/]+\/[^/]+@[^/]+\/(.+)/);
+        if (match) return match[1];
+        const match2 = url.match(/raw\.githubusercontent\.com\/[^/]+\/[^/]+\/[^/]+\/(.+)/);
+        if (match2) return match2[1];
+    } catch (_) { }
+    return null;
+};
+
+const deleteFromGithub = async (url) => {
+    const path = urlToGithubPath(url);
+    if (!path) return;
+    const res = await fetch('/api/github-delete', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path }),
+    });
+    // 404 = file sudah tidak ada, anggap sukses
+    if (!res.ok && res.status !== 404) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(`Gagal hapus file dari GitHub (${res.status}): ${err.error || 'Unknown error'}`);
+    }
+};
+
 export default function ArtistPage() {
     const [artists, setArtists] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -25,6 +52,11 @@ export default function ArtistPage() {
     // Edit Modal State
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
     const [selectedArtist, setSelectedArtist] = useState(null);
+
+    // Delete State
+    const [deleteTarget, setDeleteTarget] = useState(null);
+    const [isDeleting, setIsDeleting] = useState(false);
+    const [deleteError, setDeleteError] = useState(null);
 
     const ITEMS_PER_PAGE = 10;
 
@@ -96,6 +128,37 @@ export default function ArtistPage() {
     const handleEditClick = (artist) => {
         setSelectedArtist(artist);
         setIsEditModalOpen(true);
+    };
+
+    const handleDeleteClick = (artist, e) => {
+        e.stopPropagation();
+        setDeleteError(null);
+        setDeleteTarget(artist);
+    };
+
+    const handleConfirmDelete = async () => {
+        if (!deleteTarget) return;
+        setIsDeleting(true);
+        setDeleteError(null);
+        try {
+            // 1. Delete photo from GitHub if it exists
+            if (deleteTarget.photo_url) {
+                await deleteFromGithub(deleteTarget.photo_url);
+            }
+
+            // 2. Delete artist record from Supabase
+            const { error } = await supabase.from('artists').delete().eq('id', deleteTarget.id);
+            if (error) throw error;
+
+            // 3. Refresh list & close modal
+            setDeleteTarget(null);
+            setFetched(false); // triggers re-fetch
+        } catch (err) {
+            console.error('Delete artist failed:', err);
+            setDeleteError(err.message || 'Gagal menghapus artis. Coba lagi.');
+        } finally {
+            setIsDeleting(false);
+        }
     };
 
     return (
@@ -173,9 +236,9 @@ export default function ArtistPage() {
                                                         {artist.created_at ? formatDate(artist.created_at) : "-"}
                                                     </td>
                                                     <td className="py-4 px-6 whitespace-nowrap text-right">
-                                                        <div className="flex items-center justify-end gap-4 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                        <div className="flex items-center justify-end gap-4 transition-opacity">
                                                             <button onClick={() => handleEditClick(artist)} className="text-indigo-600 dark:text-indigo-400 hover:text-indigo-500 dark:hover:text-indigo-300"><EditIcon className="w-5 h-5" /></button>
-                                                            <button className="text-red-600 dark:text-red-500 hover:text-red-500 dark:hover:text-red-400"><DeleteIcon className="w-5 h-5" /></button>
+                                                            <button onClick={(e) => handleDeleteClick(artist, e)} className="text-red-600 dark:text-red-500 hover:text-red-500 dark:hover:text-red-400"><DeleteIcon className="w-5 h-5" /></button>
                                                         </div>
                                                     </td>
                                                 </tr>
@@ -215,8 +278,61 @@ export default function ArtistPage() {
                 isOpen={isEditModalOpen}
                 onClose={() => setIsEditModalOpen(false)}
                 artist={selectedArtist}
-                onSuccess={() => setFetched(true)}
+                onSuccess={() => setFetched(false)}
             />
+
+            {/* Modal Konfirmasi Hapus Artis */}
+            {deleteTarget && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => !isDeleting && setDeleteTarget(null)}>
+                    <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+                    <div
+                        className="relative z-10 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-2xl shadow-2xl w-full max-w-md p-6"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <div className="flex items-center justify-center w-14 h-14 rounded-full bg-rose-100 dark:bg-rose-500/10 mx-auto mb-4">
+                            <DeleteIcon className="w-7 h-7 text-rose-500" />
+                        </div>
+                        <h2 className="text-lg font-bold text-slate-900 dark:text-white text-center mb-1">Hapus Artis?</h2>
+                        <p className="text-sm text-slate-500 dark:text-slate-400 text-center mb-1">
+                            Artis <span className="font-semibold text-slate-700 dark:text-slate-200">&ldquo;{deleteTarget.name}&rdquo;</span> akan dihapus permanen.
+                        </p>
+                        <p className="text-xs text-slate-400 dark:text-slate-500 text-center mb-6">
+                            Foto artis di GitHub juga akan ikut terhapus.
+                        </p>
+
+                        {deleteError && (
+                            <div className="mb-4 px-4 py-2.5 bg-rose-50 dark:bg-rose-500/10 border border-rose-200 dark:border-rose-500/30 rounded-lg text-sm text-rose-600 dark:text-rose-400">
+                                {deleteError}
+                            </div>
+                        )}
+
+                        <div className="flex gap-3">
+                            <button
+                                onClick={() => setDeleteTarget(null)}
+                                disabled={isDeleting}
+                                className="flex-1 px-4 py-2.5 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 font-semibold hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors disabled:opacity-50"
+                            >
+                                Batal
+                            </button>
+                            <button
+                                onClick={handleConfirmDelete}
+                                disabled={isDeleting}
+                                className="flex-1 px-4 py-2.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white font-semibold transition-colors disabled:opacity-60 flex items-center justify-center gap-2"
+                            >
+                                {isDeleting ? (
+                                    <>
+                                        <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
+                                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
+                                        </svg>
+                                        Menghapus...
+                                    </>
+                                ) : 'Ya, Hapus'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </>
     );
 }

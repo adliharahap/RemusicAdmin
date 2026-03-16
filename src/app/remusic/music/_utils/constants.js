@@ -1,4 +1,4 @@
-import { Disc, Smile, CloudRain, Zap, Coffee, Heart, Brain, Moon, Gamepad2, Car, PartyPopper, Flame, Volume2, CloudFog, Sunrise, Skull, Sparkles, BookOpen, Anchor, Mic2, Star, Umbrella, Activity, Speaker, Radio, Guitar, Dumbbell, Rocket, Mic, Music, Leaf, Headphones, Music2, Film, Piano, Flag, Drum, SpeakerHigh, Sun, MoonStar, User, Tv, Terminal } from 'lucide-react';
+import { Disc, Smile, CloudRain, Zap, Coffee, Heart, Brain, Moon, Gamepad2, Car, PartyPopper, Flame, Volume2, CloudFog, Sunrise, Skull, Sparkles, BookOpen, Anchor, Mic2, Star, Umbrella, Activity, Speaker, Radio, Guitar, Dumbbell, Rocket, Mic, Music, Leaf, Headphones, Music2, Film, Piano, Flag, Drum, SpeakerHigh, Sun, MoonStar, User, Tv, Terminal, HandsPraying, SunMedium } from 'lucide-react';
 
 export const MOOD_CATEGORIES = [
     {
@@ -108,6 +108,15 @@ export const MOOD_CATEGORIES = [
             { id: "Sunda", icon: Music2, desc: "Degung, Pop Sunda, Kecapi Suling." },
             { id: "Minang", icon: Radio, desc: "Saljuang, Pop Minang, Ratok." },
             { id: "Timur", icon: Guitar, desc: "Lagu Ambon, Papua, NTT, asik buat goyang." },
+        ]
+    },
+    {
+        name: "Spiritual & Religious",
+        options: [
+            { id: "Religius", icon: Sunrise, desc: "Lagu bertema ketuhanan, inspirasional, dan spiritual umum." },
+            { id: "Sholawat & Nasyid", icon: Sunrise, desc: "Pujian Islami, sholawat nabi, nasyid, dan qasidah." },
+            { id: "Mantra & Chant", icon: Sunrise, desc: "Mantra suci, chanting meditatif, musik spiritual etnik." },
+            { id: "Ramadhan", icon: Sunrise, desc: "Lagu bertema bulan suci Ramadhan." },
         ]
     },
     {

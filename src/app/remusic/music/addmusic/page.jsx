@@ -64,6 +64,7 @@ export default function UploadSongPage() {
     const [canvasFile, setCanvasFile] = useState(null);
     const [audioPreviewUrl, setAudioPreviewUrl] = useState(null);
     const [coverPreviewUrl, setCoverPreviewUrl] = useState(null);
+    const [canvasPreviewUrl, setCanvasPreviewUrl] = useState(null);
 
     // --- PLAYER STATES (REMOVED SYNC) ---
     // isPlaying, currentTime, dst. dihapus karena VisualSyncEditor tidak dipakai lagi
@@ -143,6 +144,7 @@ export default function UploadSongPage() {
         return () => {
             if (audioPreviewUrl) URL.revokeObjectURL(audioPreviewUrl);
             if (coverPreviewUrl) URL.revokeObjectURL(coverPreviewUrl);
+            if (canvasPreviewUrl) URL.revokeObjectURL(canvasPreviewUrl);
             if (newArtistPhotoPreview) URL.revokeObjectURL(newArtistPhotoPreview);
         }
     }, []);
@@ -381,7 +383,25 @@ export default function UploadSongPage() {
         setCroppingType(null);
     };
 
-    const handleCanvasChange = (e) => setCanvasFile(e.target.files[0]);
+    const handleCanvasChange = (e) => {
+        const file = e.target.files[0];
+        if (file) {
+            setCanvasFile(file);
+            setCanvasPreviewUrl(URL.createObjectURL(file));
+        }
+    };
+
+    const handleClearCover = () => {
+        setCoverFile(null);
+        if (coverPreviewUrl) URL.revokeObjectURL(coverPreviewUrl);
+        setCoverPreviewUrl(null);
+    };
+
+    const handleClearCanvas = () => {
+        setCanvasFile(null);
+        if (canvasPreviewUrl) URL.revokeObjectURL(canvasPreviewUrl);
+        setCanvasPreviewUrl(null);
+    };
 
     const handleMoodToggle = (mood) => {
         if (moods.includes(mood)) setMoods(moods.filter(m => m !== mood));
@@ -637,9 +657,10 @@ export default function UploadSongPage() {
                         <FileUploadSection
                             theme={theme}
                             handleAudioChange={handleAudioChange} telegramFileId={telegramFileId} setTelegramFileId={setTelegramFileId}
-                            coverPreviewUrl={coverPreviewUrl} handleCoverChange={handleCoverChange}
-                            handleCanvasChange={handleCanvasChange}
+                            coverPreviewUrl={coverPreviewUrl} handleCoverChange={handleCoverChange} handleClearCover={handleClearCover}
+                            handleCanvasChange={handleCanvasChange} handleClearCanvas={handleClearCanvas} canvasPreviewUrl={canvasPreviewUrl}
                             duration={telegramFileId ? telegramDuration : localDuration}
+                            canvasFile={canvasFile}
                         />
 
                         <ArtistSelector

@@ -1,14 +1,15 @@
 import React from 'react';
-import { Github, FileAudio, MessageCircle, Image as ImageIcon, Video, Clipboard } from 'lucide-react';
+import { Github, FileAudio, MessageCircle, Image as ImageIcon, Video, Clipboard, X, Search } from 'lucide-react';
+import ImageSearchModal from './ImageSearchModal';
 
 export default function FileUploadSection({
     theme,
     // Props Audio
     handleAudioChange, telegramFileId, setTelegramFileId,
     // Props Cover
-    coverPreviewUrl, handleCoverChange,
+    coverPreviewUrl, handleCoverChange, handleClearCover,
     // Props Canvas
-    handleCanvasChange,
+    handleCanvasChange, handleClearCanvas, canvasFile, canvasPreviewUrl,
     // Props Duration
     duration = 0
 }) {
@@ -20,6 +21,8 @@ export default function FileUploadSection({
         const seconds = totalSeconds % 60;
         return `${minutes}:${seconds.toString().padStart(2, '0')}`;
     };
+
+    const [isSearchModalOpen, setIsSearchModalOpen] = React.useState(false);
 
     return (
         <div className={`p-5 rounded-2xl ${theme.cardBg} border ${theme.border} space-y-5 relative`}>
@@ -71,6 +74,16 @@ export default function FileUploadSection({
                     {coverPreviewUrl && <img src={coverPreviewUrl} className="w-12 h-12 rounded-lg object-cover border border-slate-700" alt="Cover Preview" />}
                     <div className="relative w-full flex gap-2">
                         <input type="file" accept="image/*" onChange={handleCoverChange} className={`block w-full text-xs text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-pink-600 file:text-white hover:file:bg-pink-700 cursor-pointer ${theme.inputBg} rounded-lg border ${theme.border}`} />
+                        {coverPreviewUrl && (
+                            <button
+                                type="button"
+                                onClick={handleClearCover}
+                                className={`px-3 py-2 rounded-lg border border-rose-500/30 bg-rose-500/10 hover:bg-rose-500/20 transition-colors text-rose-500`}
+                                title="Clear Cover"
+                            >
+                                <X size={16} />
+                            </button>
+                        )}
                         <button
                             type="button"
                             onClick={async () => {
@@ -95,16 +108,60 @@ export default function FileUploadSection({
                         >
                             <Clipboard size={16} />
                         </button>
+                        <button
+                            type="button"
+                            onClick={() => setIsSearchModalOpen(true)}
+                            className={`px-3 py-2 rounded-lg border ${theme.border} ${theme.inputBg} hover:bg-slate-800 transition-colors text-indigo-400`}
+                            title="Search Online"
+                        >
+                            <Search size={16} />
+                        </button>
                     </div>
                 </div>
+
+                <ImageSearchModal
+                    isOpen={isSearchModalOpen}
+                    onClose={() => setIsSearchModalOpen(false)}
+                    onSelect={(file) => handleCoverChange(file)}
+                    type="song"
+                    theme={theme}
+                />
             </div>
 
             {/* Canvas Input */}
-            <div className="space-y-2">
+            <div className="space-y-3">
                 <label className="text-xs font-semibold flex items-center gap-2">
                     <Video size={14} className="text-emerald-400" /> Canvas Video (MP4)
                 </label>
-                <input type="file" accept="video/mp4" onChange={handleCanvasChange} className={`block w-full text-xs text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-emerald-600 file:text-white hover:file:bg-emerald-700 cursor-pointer ${theme.inputBg} rounded-lg border ${theme.border}`} />
+
+                {canvasPreviewUrl && (
+                    <div className="w-full max-w-[180px] aspect-[9/16] rounded-2xl overflow-hidden border border-slate-700 bg-black shadow-2xl group relative">
+                        <video
+                            src={canvasPreviewUrl}
+                            className="w-full h-full object-cover"
+                            autoPlay
+                            muted
+                            loop
+                            playsInline
+                        />
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent pointer-events-none" />
+                        <div className="absolute bottom-2 left-2 text-[8px] font-bold text-white/50 uppercase tracking-widest">Preview 9:16</div>
+                    </div>
+                )}
+
+                <div className="flex gap-2">
+                    <input type="file" accept="video/mp4" onChange={handleCanvasChange} className={`block w-full text-xs text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-emerald-600 file:text-white hover:file:bg-emerald-700 cursor-pointer ${theme.inputBg} rounded-lg border ${theme.border}`} />
+                    {canvasFile && (
+                        <button
+                            type="button"
+                            onClick={handleClearCanvas}
+                            className={`px-3 py-2 rounded-lg border border-rose-500/30 bg-rose-500/10 hover:bg-rose-500/20 transition-colors text-rose-500`}
+                            title="Clear Canvas"
+                        >
+                            <X size={16} />
+                        </button>
+                    )}
+                </div>
             </div>
         </div>
     );

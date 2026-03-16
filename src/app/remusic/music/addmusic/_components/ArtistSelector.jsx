@@ -1,5 +1,6 @@
 import React, { useRef, useEffect, useState } from 'react';
-import { Search, Plus, X, Check, Clipboard, ChevronLeft, ChevronRight, Sparkles } from 'lucide-react';
+import { Search, Plus, X, Check, Clipboard, ChevronLeft, ChevronRight, Sparkles, User } from 'lucide-react';
+import ImageSearchModal from './ImageSearchModal';
 
 export default function ArtistSelector({
     artists, selectedArtist, setSelectedArtist,
@@ -14,6 +15,7 @@ export default function ArtistSelector({
     const dropdownRef = useRef(null);
     const [tagInput, setTagInput] = useState("");
     const [isGeneratingBio, setIsGeneratingBio] = useState(false);
+    const [isSearchModalOpen, setIsSearchModalOpen] = useState(false);
 
     const handleKeyDown = (e) => {
         if (e.key === 'Enter' || e.key === ',') {
@@ -164,8 +166,24 @@ export default function ArtistSelector({
                             >
                                 <Clipboard size={14} />
                             </button>
+                            <button
+                                type="button"
+                                onClick={() => setIsSearchModalOpen(true)}
+                                className={`px-3 py-1.5 rounded-lg border ${theme.border} ${theme.inputBg} hover:bg-slate-800 transition-colors text-emerald-400`}
+                                title="Search Artist Photo"
+                            >
+                                <Search size={14} />
+                            </button>
                         </div>
                     </div>
+
+                    <ImageSearchModal
+                        isOpen={isSearchModalOpen}
+                        onClose={() => setIsSearchModalOpen(false)}
+                        onSelect={(file) => handleNewArtistPhotoChange(file)}
+                        type="artist"
+                        theme={theme}
+                    />
 
                     <div className="space-y-1.5">
                         <div className="flex items-center justify-between">

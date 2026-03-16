@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Disc, Smile, CloudRain, Zap, Coffee, Heart, Brain, Moon, Gamepad2, Car, PartyPopper, Flame, Volume2, CloudFog, Sunrise, Skull, Sparkles, BookOpen, Anchor, Mic2, Star, Umbrella, Activity, Speaker, Radio, Guitar, Dumbbell, Rocket, Mic, Music, Leaf, Headphones, Music2, Film, Piano, Flag, Drum, SpeakerHigh, Sun, MoonStar, User, Search, X } from 'lucide-react';
+import { Disc, Smile, CloudRain, Zap, Coffee, Heart, Brain, Moon, Gamepad2, Car, PartyPopper, Flame, Volume2, CloudFog, Sunrise, Skull, Sparkles, BookOpen, Anchor, Mic2, Star, Umbrella, Activity, Speaker, Radio, Guitar, Dumbbell, Rocket, Mic, Music, Leaf, Headphones, Music2, Film, Piano, Flag, Drum, SpeakerHigh, Sun, MoonStar, User, Search, X, Cpu, ChevronDown } from 'lucide-react';
 import { LANGUAGE_CATEGORIES, MOOD_CATEGORIES } from '../../_utils/constants';
 
 
@@ -19,6 +19,25 @@ export default function MetadataForm({
     const [isAnalyzingMood, setIsAnalyzingMood] = useState(false);
     const [isDetectingLanguage, setIsDetectingLanguage] = useState(false);
     const [isTranslating, setIsTranslating] = useState(false);
+
+    // AI Model State
+    const [selectedAiModel, setSelectedAiModel] = useState('gemini-2.0-flash');
+    const [isModelDropdownOpen, setIsModelDropdownOpen] = useState(false);
+
+    const SUPPORTED_MODELS = [
+        { id: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash', desc: 'Sangat Cepat & Tercanggih' },
+        { id: 'gemini-2.5-pro', label: 'Gemini 2.5 Pro', desc: 'Kualitas Terbaik (Pro)' },
+        { id: 'gemini-2.0-flash', label: 'Gemini 2.0 Flash', desc: 'Keseimbangan Kecepatan & Kualitas' },
+        { id: 'gemini-2.0-flash-lite', label: 'Gemini 2.0 Lite', desc: 'Paling Ringan & Efisien' },
+        { id: 'gemini-2.0-flash-exp', label: 'Gemini 2.0 Flash Exp', desc: 'Experimental / Preview' },
+        { id: 'gemini-1.5-flash', label: 'Gemini 1.5 Flash', desc: 'Stabil & Terpercaya' },
+        { id: 'gemini-1.5-flash-8b', label: 'Gemini 1.5 8B', desc: 'Sangat Ringan (Old)' },
+        { id: 'gemini-3.0-flash', label: 'Gemini 3.0 Flash', desc: 'Next Gen Preview' },
+        { id: 'gemini-2.5-flash-lite', label: 'Gemini 2.5 Lite', desc: 'Versi Ringan 2.5' },
+        { id: 'gemini-3.1-pro', label: 'Gemini 3.1 Pro', desc: 'Future Generation Pro' },
+        { id: 'gemini-3.1-flash-lite', label: 'Gemini 3.1 Lite', desc: 'Future Generation Lite' },
+    ];
+
     const handleAnalyzeMood = async () => {
         if (!lyricsRaw.trim()) return alert("Lyrics cannot be empty for mood analysis.");
         if (!language) return alert("Please select a Song Language first to help the AI detect precise regional moods.");
@@ -28,7 +47,7 @@ export default function MetadataForm({
             const res = await fetch('/api/ai-generate', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ type: 'mood', text: lyricsRaw, language })
+                body: JSON.stringify({ type: 'mood', text: lyricsRaw, language, model: selectedAiModel })
             });
             const data = await res.json();
             if (data.success && data.moods) {
@@ -53,7 +72,7 @@ export default function MetadataForm({
             const res = await fetch('/api/ai-generate', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ type: 'language', text: lyricsRaw })
+                body: JSON.stringify({ type: 'language', text: lyricsRaw, model: selectedAiModel })
             });
             const data = await res.json();
             if (data.success && data.language) {
@@ -76,7 +95,7 @@ export default function MetadataForm({
             const res = await fetch('/api/ai-generate', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ type: 'translate', text: lyricsRaw })
+                body: JSON.stringify({ type: 'translate', text: lyricsRaw, model: selectedAiModel })
             });
             const data = await res.json();
             if (data.success && data.translation) {
@@ -105,6 +124,47 @@ export default function MetadataForm({
 
     return (
         <div className="space-y-8">
+            {/* AI Model Selector */}
+            <div className={`p-4 rounded-2xl border ${theme.border} bg-gradient-to-br from-indigo-500/5 to-purple-500/5 space-y-3`}>
+                <div className="flex items-center justify-between">
+                    <label className="text-[10px] font-bold uppercase tracking-widest text-indigo-400 flex items-center gap-2">
+                        <Cpu size={14} /> AI Generation Engine
+                    </label>
+                    <div className="relative">
+                        <button
+                            type="button"
+                            onClick={() => setIsModelDropdownOpen(!isModelDropdownOpen)}
+                            className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border ${theme.border} ${theme.inputBg} text-xs font-bold transition-all hover:border-indigo-500`}
+                        >
+                            {SUPPORTED_MODELS.find(m => m.id === selectedAiModel)?.label}
+                            <ChevronDown size={14} className={`transition-transform ${isModelDropdownOpen ? 'rotate-180' : ''}`} />
+                        </button>
+
+                        {isModelDropdownOpen && (
+                            <div className={`absolute right-0 mt-2 w-64 rounded-xl border ${theme.border} ${theme.cardBg} shadow-2xl z-50 overflow-hidden`}>
+                                {SUPPORTED_MODELS.map((m) => (
+                                    <button
+                                        key={m.id}
+                                        type="button"
+                                        onClick={() => {
+                                            setSelectedAiModel(m.id);
+                                            setIsModelDropdownOpen(false);
+                                        }}
+                                        className={`w-full text-left p-3 hover:bg-white/5 transition-colors border-b last:border-0 ${theme.border} ${selectedAiModel === m.id ? 'bg-indigo-500/10' : ''}`}
+                                    >
+                                        <div className={`text-[11px] font-bold ${selectedAiModel === m.id ? 'text-indigo-400' : theme.text}`}>{m.label}</div>
+                                        <div className="text-[9px] opacity-50">{m.desc}</div>
+                                    </button>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                </div>
+                <p className="text-[10px] opacity-50 leading-relaxed">
+                    Pilih model AI yang ingin digunakan. Jika satu model terkena <b>Rate Limit</b>, silakan ganti ke model lain (Flash Lite atau 1.5 Flash) agar tetap bisa melakukan generasi.
+                </p>
+            </div>
+
             {/* Title Input */}
             <div className="space-y-2">
                 <label className="text-xs font-bold uppercase tracking-wider opacity-70 flex items-center gap-1">

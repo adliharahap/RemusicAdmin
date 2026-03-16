@@ -9,6 +9,36 @@ import { Music } from 'lucide-react';
 import Link from 'next/link';
 // --- Helper Functions ---
 
+// Convert a jsDelivr/raw GitHub CDN URL back to the repo file path
+const urlToGithubPath = (url) => {
+  if (!url) return null;
+  try {
+    // Handles: https://cdn.jsdelivr.net/gh/{owner}/{repo}@main/{path}
+    const match = url.match(/\/gh\/[^/]+\/[^/]+@[^/]+\/(.+)/);
+    if (match) return match[1];
+    // Handles: https://raw.githubusercontent.com/{owner}/{repo}/main/{path}
+    const match2 = url.match(/raw\.githubusercontent\.com\/[^/]+\/[^/]+\/[^/]+\/(.+)/);
+    if (match2) return match2[1];
+  } catch (_) { }
+  return null;
+};
+
+// Delete a single file from GitHub by its CDN/raw URL
+const deleteFromGithub = async (url) => {
+  const path = urlToGithubPath(url);
+  if (!path) return; // skip if URL can't be parsed
+  const res = await fetch('/api/github-delete', {
+    method: 'DELETE',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ path }),
+  });
+  // 404 = file sudah tidak ada, anggap sukses
+  if (!res.ok && res.status !== 404) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(`Gagal hapus file dari GitHub (${res.status}): ${err.error || 'Unknown error'}`);
+  }
+};
+
 const formatDuration = (ms) => {
   if (!ms || isNaN(ms)) return '0:00';
   const minutes = Math.floor(ms / 60000);
@@ -39,6 +69,11 @@ export default function MusikPage() {
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedSong, setSelectedSong] = useState(null);
+
+  // Delete State
+  const [deleteTarget, setDeleteTarget] = useState(null); // song to delete
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState(null);
 
   // URL Pagination Hooks
   const searchParams = useSearchParams();
@@ -131,6 +166,39 @@ export default function MusikPage() {
     setIsModalOpen(true);
   };
 
+  const handleDeleteClick = (song, e) => {
+    e.stopPropagation();
+    setDeleteError(null);
+    setDeleteTarget(song);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!deleteTarget) return;
+    setIsDeleting(true);
+    setDeleteError(null);
+    try {
+      // 1. Delete files from GitHub in parallel (ignore individual failures)
+      const githubDeletions = [
+        deleteTarget.cover_url ? deleteFromGithub(deleteTarget.cover_url) : Promise.resolve(),
+        deleteTarget.canvas_url ? deleteFromGithub(deleteTarget.canvas_url) : Promise.resolve(),
+      ];
+      await Promise.all(githubDeletions);
+
+      // 2. Delete record from Supabase only after GitHub cleanup
+      const { error } = await supabase.from('songs').delete().eq('id', deleteTarget.id);
+      if (error) throw error;
+
+      // 3. Refresh list & close modal
+      setDeleteTarget(null);
+      fetchSongs();
+    } catch (err) {
+      console.error('Delete song failed:', err);
+      setDeleteError(err.message || 'Gagal menghapus lagu. Coba lagi.');
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
   return (
     <div className="space-y-6 p-6">
       {/* Header */}
@@ -213,7 +281,7 @@ export default function MusikPage() {
                           className="w-12 h-12 rounded-lg object-cover shadow-sm bg-slate-200 dark:bg-slate-800 border border-slate-200 dark:border-slate-700"
                         />
                         <div>
-                          <div className="font-bold text-slate-900 dark:text-white text-base mb-0.5">{song.title}</div>
+                          <div className="font-bold text-slate-900 dark:text-white text-base mb-0.5"><p className='max-w-[300px] truncate text-ellipsis'>{song.title}</p></div>
                           <div className="text-xs text-slate-500 font-mono truncate max-w-[150px]">ID: {song.id.split('-')[0]}...</div>
                         </div>
                       </div>
@@ -237,7 +305,7 @@ export default function MusikPage() {
                       {formatDate(song.created_at)}
                     </td>
                     <td className="py-4 px-6 text-right">
-                      <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <div className="flex items-center justify-end gap-2 transition-opacity">
                         <button
                           className="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-700 rounded-full transition-all"
                           title="Edit"
@@ -248,10 +316,7 @@ export default function MusikPage() {
                         <button
                           className="p-2 text-rose-500 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-500/10 rounded-full transition-all"
                           title="Hapus"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            alert("Fitur hapus belum ada.");
-                          }}
+                          onClick={(e) => handleDeleteClick(song, e)}
                         >
                           <DeleteIcon className="w-4 h-4" />
                         </button>
@@ -304,9 +369,65 @@ export default function MusikPage() {
       <EditSongModal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
-        song={selectedSong} // Ini sekarang menerima objek snake_case (original data)
-        onSuccess={() => fetchSongs()} // Panggil fetch ulang saat sukses edit
+        song={selectedSong}
+        onSuccess={() => fetchSongs()}
       />
+
+      {/* Modal Konfirmasi Hapus */}
+      {deleteTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => !isDeleting && setDeleteTarget(null)}>
+          {/* Backdrop */}
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+          {/* Dialog */}
+          <div
+            className="relative z-10 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-2xl shadow-2xl w-full max-w-md p-6"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Icon */}
+            <div className="flex items-center justify-center w-14 h-14 rounded-full bg-rose-100 dark:bg-rose-500/10 mx-auto mb-4">
+              <DeleteIcon className="w-7 h-7 text-rose-500" />
+            </div>
+            <h2 className="text-lg font-bold text-slate-900 dark:text-white text-center mb-1">Hapus Lagu?</h2>
+            <p className="text-sm text-slate-500 dark:text-slate-400 text-center mb-1">
+              Lagu <span className="font-semibold text-slate-700 dark:text-slate-200">&ldquo;{deleteTarget.title}&rdquo;</span> akan dihapus permanen.
+            </p>
+            <p className="text-xs text-slate-400 dark:text-slate-500 text-center mb-6">
+              File cover & canvas di GitHub juga akan ikut terhapus.
+            </p>
+
+            {deleteError && (
+              <div className="mb-4 px-4 py-2.5 bg-rose-50 dark:bg-rose-500/10 border border-rose-200 dark:border-rose-500/30 rounded-lg text-sm text-rose-600 dark:text-rose-400">
+                {deleteError}
+              </div>
+            )}
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => setDeleteTarget(null)}
+                disabled={isDeleting}
+                className="flex-1 px-4 py-2.5 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 font-semibold hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors disabled:opacity-50"
+              >
+                Batal
+              </button>
+              <button
+                onClick={handleConfirmDelete}
+                disabled={isDeleting}
+                className="flex-1 px-4 py-2.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white font-semibold transition-colors disabled:opacity-60 flex items-center justify-center gap-2"
+              >
+                {isDeleting ? (
+                  <>
+                    <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
+                    </svg>
+                    Menghapus...
+                  </>
+                ) : 'Ya, Hapus'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

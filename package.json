@@ -27,7 +27,8 @@
     "react-easy-crop": "^5.5.6",
     "react-redux": "^9.2.0",
     "redux-persist": "^6.0.0",
-    "telegraf": "^4.16.3"
+    "telegraf": "^4.16.3",
+    "ytmusic-api": "^5.3.1"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",

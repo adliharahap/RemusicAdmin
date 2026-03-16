@@ -43,7 +43,7 @@ export async function DELETE(request) {
                     Accept: 'application/vnd.github.v3+json',
                 },
                 body: JSON.stringify({
-                    message: `Delete playlist asset: ${item.path}`,
+                    message: `Delete asset: ${item.path}`,
                     sha: item.sha, // WAJIB ADA SHA UNTUK DELETE
                 }),
             });
